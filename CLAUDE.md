@@ -42,6 +42,13 @@ Skills contain **generic logic** ("how to operate a task-system's tasks and docs
 - **Draft, never send.** Emails are always drafts until the user explicitly confirms sending. Never auto-send.
 - **Confirm before writes; read freely.** Reading the calendar, task system, mail, or the vault needs no permission. Modifying vault notes, creating tasks, or creating/deleting calendar events needs confirmation.
 - **Respect read-only zones.** Never modify Templater `<%* ... %>` blocks, live \`\`\`tasks query blocks, or files in the read-only folders listed in `readonly-zones.local` (documented in `maps/vault-map.md`; the `.local` file is what the hook actually enforces).
+- **Publishing is never implied.** A commit, a push, or "ship it" is not approval to make
+  content public. Publication is irreversible in a way commits are not: a push to a public
+  repo enters the platform's public events stream, third parties mirror it, and a later
+  force-push does not remove the commit. So `setup/publish.sh` and the publish workflow run
+  only on an explicit instruction to publish, given for that occasion. When a change affects
+  the shareable export, say so, review the diff against the checklist in `README.md`, report
+  what it contains, and wait for an answer.
 - **Don't restructure without permission.** No new folders, no reorganizing, no bulk reformatting unless explicitly asked.
 - **Financial/legal caution.** Don't execute trades, move money, or place orders. Provide information; let the user act.
 
