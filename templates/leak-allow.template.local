@@ -1,0 +1,18 @@
+# Literals that are DELIBERATELY public, even though leak-patterns.local matches
+# them. Fixed strings (not regexes), one per line; blank lines and #-comments
+# ignored. The export strips these from a matched line before deciding it is a
+# leak, so the same pattern is still caught everywhere else.
+#
+# You need this as soon as you publish: your name belongs in LICENSE and your
+# repo URL belongs in README, yet both match patterns you will have listed in
+# leak-patterns.local. Without an entry here, export.sh refuses to build.
+#
+# Keep entries as SPECIFIC as possible. "Jane Doe" exempts one exact string;
+# "Jane" would disable the name check everywhere, including in prose that names
+# you by accident.
+#
+# Never exported.
+#
+# Examples -- replace with your own:
+# Jane Doe
+# github.com/janedoe/your-repo

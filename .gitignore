@@ -1,0 +1,20 @@
+# Rebuildable search index (SQLite binary)
+databases/*
+!databases/.gitkeep
+
+# OS cruft
+.DS_Store
+
+# SDD scratch (subagent-driven-development workspace)
+.superpowers/
+
+# Disposable working files: pre-edit snapshots, test artefacts, scratch.
+# The whole folder is ignored, so a new snapshot is ignored by default and
+# nothing has to be remembered. Its README explains what may live there.
+#
+# history/ deliberately has NO rule: it is append-forever and fully tracked,
+# so a new log file dropped there is tracked by default. The two folders were
+# one folder behind a whitelist until 2026-09-01; splitting them by lifecycle
+# means neither needs a negation and neither can guess wrong.
+tmp/*
+!tmp/README.md

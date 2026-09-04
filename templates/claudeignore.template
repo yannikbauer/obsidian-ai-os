@@ -1,0 +1,6 @@
+# Folders Claude Code should not index (saves tokens; avoids scanning binaries/logs)
+Attachments/
+Archive/
+_AI/databases/
+# Add any plugin data folders your vault has (they are large and not worth indexing),
+# plus anything else Claude should never scan.

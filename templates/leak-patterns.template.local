@@ -1,0 +1,23 @@
+# Personal identifiers the export leak-check scans for.
+# One extended-regex pattern per line. Blank lines and #-comments are ignored.
+#
+# WHY THIS FILE MATTERS: without it, export.sh falls back to two built-in generic
+# checks (any email address, any Google calendar id) and nothing else. Those catch
+# the obvious cases and none of the ones specific to you. Fill this in before you
+# publish anything.
+#
+# This file is never exported -- your identifiers do not belong in a shared repo.
+#
+# Add, at minimum:
+#   - your name, in the spellings that actually occur (given, family, handle)
+#   - your email addresses
+#   - workspace / account / calendar / list ids from integrations/
+#   - employer, client and project names you are under any obligation about
+#   - names of family, partners and friends
+#
+# Examples -- replace these, they match nothing useful as written:
+# [Jj]ane
+# [Dd]oe
+# jane\.doe@
+# 1234567
+# @group\.calendar\.google\.com

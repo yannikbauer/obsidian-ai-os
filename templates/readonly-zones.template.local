@@ -1,0 +1,14 @@
+# Folders the AI must never write into. One shell glob per line; blank lines and
+# #-comments ignored. Matched against the full file path, so patterns want the
+# leading and trailing */ ... /* form.
+#
+# This file REPLACES the hook's built-in defaults rather than adding to them, so
+# list everything you want blocked. The two below are the defaults; keep them
+# unless you mean to drop them.
+#
+# Never exported: your folder names describe your vault.
+# Keep it in step with the read-only section of maps/vault-map.md.
+*/Archive/*
+*/Attachments/*
+# Add your own, e.g. plugin data folders:
+# */copilot/*

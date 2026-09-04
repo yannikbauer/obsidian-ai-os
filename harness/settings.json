@@ -1,0 +1,55 @@
+{
+  "model": "opus",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/_AI/harness/hooks/guard-vault-write.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*__clickup_(update|create)_document_page$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/_AI/harness/hooks/guard-clickup.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*__(send_message|reply|forward)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/_AI/harness/hooks/guard-mail.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/_AI/harness/hooks/trace-write.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/_AI/harness/hooks/check-file-log.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+# Where setup/publish.sh publishes, and under whose name.
+# Sourced as shell. Never exported. Uncomment and fill in to enable publishing;
+# while AIOS_PUBLIC_REMOTE is unset, publish.sh refuses to run and says so.
+
+# AIOS_PUBLIC_REMOTE=https://github.com/<you>/<repo>.git
+
+# Identity stamped on PUBLIC commits. Deliberately NOT your ~/.gitconfig address:
+# commit metadata is not file content, so the leak check cannot see it, and it
+# cannot be scrubbed once pushed. The users.noreply form still links commits to
+# your GitHub account.
+# AIOS_PUBLIC_GIT_NAME="Your Name"
+# AIOS_PUBLIC_GIT_EMAIL=<you>@users.noreply.github.com
