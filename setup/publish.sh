@@ -25,6 +25,8 @@
 #   AIOS_PUBLIC_REMOTE      destination repo
 #   AIOS_PUBLIC_GIT_NAME    author name on public commits
 #   AIOS_PUBLIC_GIT_EMAIL   author email on public commits
+#   AIOS_PUBLIC_TOPICS      space-separated GitHub topics, applied after a push
+#   AIOS_PUBLIC_DESCRIPTION the repo's one-line description
 
 set -euo pipefail
 
@@ -163,6 +165,56 @@ SRC_SHA="$(cd "$AI_DIR" && git rev-parse --short HEAD 2>/dev/null || echo unknow
 git -c "user.name=$PUBLIC_GIT_NAME" -c "user.email=$PUBLIC_GIT_EMAIL" \
     commit -q -m "Sync AI OS framework (source $SRC_SHA)"
 
+sync_metadata () {
+  # Topics and description are repo METADATA -- they live in GitHub's database,
+  # not in any file, so nothing in the export can carry them and they drift
+  # silently. Declaring them in publish.local makes them versioned like the rest.
+  [ -n "${AIOS_PUBLIC_TOPICS:-}${AIOS_PUBLIC_DESCRIPTION:-}" ] || return 0
+
+  if ! command -v gh >/dev/null; then
+    echo "  (skipping topics/description: gh CLI not found)"
+    return 0
+  fi
+
+  # owner/repo from the remote, https or ssh form
+  slug="${PUBLIC_REMOTE%.git}"
+  slug="${slug##*github.com/}"
+  slug="${slug##*github.com:}"
+
+  if [ -n "${AIOS_PUBLIC_TOPICS:-}" ]; then
+    # PUT replaces the whole set, which is the point: publish.local is the single
+    # source of truth, so removing a topic there removes it on GitHub too.
+    want="$(printf '%s\n' $AIOS_PUBLIC_TOPICS | sort | tr '\n' ' ')"
+    have="$(gh api "repos/$slug/topics" --jq '.names[]' 2>/dev/null | sort | tr '\n' ' ')"
+    if [ "$want" = "$have" ]; then
+      echo "  topics already match publish.local"
+    else
+      set -- --method PUT "repos/$slug/topics"
+      for t in $AIOS_PUBLIC_TOPICS; do set -- "$@" -f "names[]=$t"; done
+      # A fine-grained token scoped to Contents cannot write metadata, so this
+      # fails in CI by design. That must not fail the publish -- the content is
+      # already pushed, and metadata is cosmetic.
+      if gh api "$@" >/dev/null 2>&1; then
+        echo "  topics updated: $want"
+      else
+        echo "  (could not set topics -- the token likely lacks Administration:"
+        echo "   write. Harmless; set them once from a machine with your gh login.)"
+      fi
+    fi
+  fi
+
+  if [ -n "${AIOS_PUBLIC_DESCRIPTION:-}" ]; then
+    have_d="$(gh api "repos/$slug" --jq '.description // ""' 2>/dev/null)"
+    if [ "$have_d" = "$AIOS_PUBLIC_DESCRIPTION" ]; then
+      echo "  description already matches publish.local"
+    elif gh api --method PATCH "repos/$slug" -f "description=$AIOS_PUBLIC_DESCRIPTION" >/dev/null 2>&1; then
+      echo "  description updated"
+    else
+      echo "  (could not set description -- same permission caveat as topics)"
+    fi
+  fi
+}
+
 if [ -n "$BRANCH" ]; then
   # Force is correct here and only here: the sync branch is a machine-owned
   # mirror of the current export, rebuilt from scratch each run. It is never the
@@ -171,8 +223,11 @@ if [ -n "$BRANCH" ]; then
   echo
   echo "Pushed to branch '$BRANCH' on $PUBLIC_REMOTE."
   echo "Open a PR from it to review the public diff before it lands."
+  # Deliberately no metadata sync here: the branch is a proposal, and topics
+  # would take effect on the live repo before anyone approved it.
 else
   git push -q origin HEAD
   echo
   echo "Published. $PUBLIC_REMOTE is now at $(git rev-parse --short HEAD)."
+  sync_metadata
 fi

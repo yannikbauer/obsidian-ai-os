@@ -10,3 +10,10 @@
 # your GitHub account.
 # AIOS_PUBLIC_GIT_NAME="Your Name"
 # AIOS_PUBLIC_GIT_EMAIL=<you>@users.noreply.github.com
+
+# Repo metadata, applied after a successful push to the default branch. Topics
+# are a REPLACE, so this list is the single source of truth -- removing one here
+# removes it on GitHub. Needs a gh login with Administration write; without it
+# the sync is skipped with a note rather than failing the publish.
+# AIOS_PUBLIC_TOPICS="obsidian claude-code pkm second-brain"
+# AIOS_PUBLIC_DESCRIPTION="One line describing your fork"
