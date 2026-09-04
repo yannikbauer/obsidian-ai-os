@@ -66,6 +66,56 @@ if [ -z "$PUBLIC_GIT_EMAIL" ]; then
   exit 64
 fi
 
+sync_metadata () {
+  # Topics and description are repo METADATA -- they live in GitHub's database,
+  # not in any file, so nothing in the export can carry them and they drift
+  # silently. Declaring them in publish.local makes them versioned like the rest.
+  [ -n "${AIOS_PUBLIC_TOPICS:-}${AIOS_PUBLIC_DESCRIPTION:-}" ] || return 0
+
+  if ! command -v gh >/dev/null; then
+    echo "  (skipping topics/description: gh CLI not found)"
+    return 0
+  fi
+
+  # owner/repo from the remote, https or ssh form
+  slug="${PUBLIC_REMOTE%.git}"
+  slug="${slug##*github.com/}"
+  slug="${slug##*github.com:}"
+
+  if [ -n "${AIOS_PUBLIC_TOPICS:-}" ]; then
+    # PUT replaces the whole set, which is the point: publish.local is the single
+    # source of truth, so removing a topic there removes it on GitHub too.
+    want="$(printf '%s\n' $AIOS_PUBLIC_TOPICS | sort | tr '\n' ' ')"
+    have="$(gh api "repos/$slug/topics" --jq '.names[]' 2>/dev/null | sort | tr '\n' ' ')"
+    if [ "$want" = "$have" ]; then
+      echo "  topics already match publish.local"
+    else
+      set -- --method PUT "repos/$slug/topics"
+      for t in $AIOS_PUBLIC_TOPICS; do set -- "$@" -f "names[]=$t"; done
+      # A fine-grained token scoped to Contents cannot write metadata, so this
+      # fails in CI by design. That must not fail the publish -- the content is
+      # already pushed, and metadata is cosmetic.
+      if gh api "$@" >/dev/null 2>&1; then
+        echo "  topics updated: $want"
+      else
+        echo "  (could not set topics -- the token likely lacks Administration:"
+        echo "   write. Harmless; set them once from a machine with your gh login.)"
+      fi
+    fi
+  fi
+
+  if [ -n "${AIOS_PUBLIC_DESCRIPTION:-}" ]; then
+    have_d="$(gh api "repos/$slug" --jq '.description // ""' 2>/dev/null)"
+    if [ "$have_d" = "$AIOS_PUBLIC_DESCRIPTION" ]; then
+      echo "  description already matches publish.local"
+    elif gh api --method PATCH "repos/$slug" -f "description=$AIOS_PUBLIC_DESCRIPTION" >/dev/null 2>&1; then
+      echo "  description updated"
+    else
+      echo "  (could not set description -- same permission caveat as topics)"
+    fi
+  fi
+}
+
 DRY_RUN=0
 ASSUME_YES=0
 BRANCH=""
@@ -134,6 +184,10 @@ if git diff --cached --quiet; then
   signal_changed false
   echo
   echo "No changes — public repo is already up to date."
+  # Metadata still gets a pass: topics and description live in GitHub's database,
+  # not in the tree, so they can drift from publish.local while every file matches.
+  # Exiting here would make a topics-only edit impossible to apply.
+  if [ "$DRY_RUN" -ne 1 ] && [ -z "$BRANCH" ]; then sync_metadata; fi
   exit 0
 fi
 signal_changed true
@@ -164,56 +218,6 @@ fi
 SRC_SHA="$(cd "$AI_DIR" && git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 git -c "user.name=$PUBLIC_GIT_NAME" -c "user.email=$PUBLIC_GIT_EMAIL" \
     commit -q -m "Sync AI OS framework (source $SRC_SHA)"
-
-sync_metadata () {
-  # Topics and description are repo METADATA -- they live in GitHub's database,
-  # not in any file, so nothing in the export can carry them and they drift
-  # silently. Declaring them in publish.local makes them versioned like the rest.
-  [ -n "${AIOS_PUBLIC_TOPICS:-}${AIOS_PUBLIC_DESCRIPTION:-}" ] || return 0
-
-  if ! command -v gh >/dev/null; then
-    echo "  (skipping topics/description: gh CLI not found)"
-    return 0
-  fi
-
-  # owner/repo from the remote, https or ssh form
-  slug="${PUBLIC_REMOTE%.git}"
-  slug="${slug##*github.com/}"
-  slug="${slug##*github.com:}"
-
-  if [ -n "${AIOS_PUBLIC_TOPICS:-}" ]; then
-    # PUT replaces the whole set, which is the point: publish.local is the single
-    # source of truth, so removing a topic there removes it on GitHub too.
-    want="$(printf '%s\n' $AIOS_PUBLIC_TOPICS | sort | tr '\n' ' ')"
-    have="$(gh api "repos/$slug/topics" --jq '.names[]' 2>/dev/null | sort | tr '\n' ' ')"
-    if [ "$want" = "$have" ]; then
-      echo "  topics already match publish.local"
-    else
-      set -- --method PUT "repos/$slug/topics"
-      for t in $AIOS_PUBLIC_TOPICS; do set -- "$@" -f "names[]=$t"; done
-      # A fine-grained token scoped to Contents cannot write metadata, so this
-      # fails in CI by design. That must not fail the publish -- the content is
-      # already pushed, and metadata is cosmetic.
-      if gh api "$@" >/dev/null 2>&1; then
-        echo "  topics updated: $want"
-      else
-        echo "  (could not set topics -- the token likely lacks Administration:"
-        echo "   write. Harmless; set them once from a machine with your gh login.)"
-      fi
-    fi
-  fi
-
-  if [ -n "${AIOS_PUBLIC_DESCRIPTION:-}" ]; then
-    have_d="$(gh api "repos/$slug" --jq '.description // ""' 2>/dev/null)"
-    if [ "$have_d" = "$AIOS_PUBLIC_DESCRIPTION" ]; then
-      echo "  description already matches publish.local"
-    elif gh api --method PATCH "repos/$slug" -f "description=$AIOS_PUBLIC_DESCRIPTION" >/dev/null 2>&1; then
-      echo "  description updated"
-    else
-      echo "  (could not set description -- same permission caveat as topics)"
-    fi
-  fi
-}
 
 if [ -n "$BRANCH" ]; then
   # Force is correct here and only here: the sync branch is a machine-owned
