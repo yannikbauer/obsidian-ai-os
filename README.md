@@ -31,16 +31,24 @@ _AI/                        the git repo — git lives here, not at the vault ro
 │   ├── obsidian/             notes: the always-present substrate
 │   ├── calendar/  clickup/  mail/    one per tool role
 │   ├── setup/                configure and health-check integrations
+│   ├── retro/                turn a session into lessons, and apply them
+│   ├── usage/                what this account actually spends
 │   └── demo/                 present the OS to someone else
 │
 ├── harness/                the harness's own configuration            generic
 │   ├── settings.json         model pin + hooks; symlinked from .claude/
-│   ├── hooks/                deny gates, vault-write trace, Stop check
+│   ├── hooks/                deny gates, vault-write trace, two Stop hooks
 │   └── tests/run.sh          fixtures — every hook, including malformed input
+│
+├── tools/                  read-only scripts skills call by path        generic
+│   ├── session-digest.sh     reduce a transcript to what a retro needs
+│   ├── check-coverage.sh     the enumerations that must match reality
+│   └── usage.sh              token usage, read from Claude Code's own logs
 │
 ├── history/                append-forever, fully tracked              personal
 │   ├── file-log.md           AI changes to vault notes outside _AI/
-│   └── session-log.md        continuity between sessions
+│   ├── session-log.md        continuity between sessions
+│   └── lessons.md            the learning ledger — what it has been taught
 │
 ├── docs/                   thinking, not machinery                    personal · never exported
 │   ├── roadmap.md            living index of intent
@@ -72,11 +80,13 @@ safe to re-run:
 |---|---|---|
 | `me.md`, `maps/vault-map.md` | templates | yours to fill in |
 | `history/file-log.md`, `history/session-log.md` | templates | your record, not the framework's |
+| `history/lessons.md` | template | the learning ledger — what the OS has been taught |
 | `docs/README.md` | template | creates the folder and says what it is for |
 | `tmp/README.md` | template | `tmp/` is gitignored, so the folder needs creating |
 | `leak-patterns.local`, `leak-allow.local` | templates | your identifiers |
 | `readonly-zones.local` | template | your folder names |
 | `publish.local` | template | your destination; ships commented out |
+| `correction-words.local` | template | what counts as you correcting the AI; all comments by default, so the built-in English list stays in force |
 | `integrations/` | — | **empty on purpose**: a file's existence is the on-switch, so a placeholder here would read as a half-configured tool. The `setup` skill writes the real files. |
 
 `databases/` is not created: it is a placeholder for a search index that does not
@@ -111,9 +121,14 @@ because these are design decisions, not a backlog of oversights.
   automation than was built, kept off on purpose.
 - **There is no search index.** Finding something means scanning. This is the largest
   open item.
-- **It does not learn.** Sessions record what was decided and what went wrong, but
-  nothing feeds that back into behaviour. It is a well-organised archive, not a
-  learning system.
+- **Learning is human-gated, and new.** A retro pass reads a session's own transcript
+  rather than its summary of itself, and routes what it finds: a fact about a tool into
+  that tool's integration file, a workflow step into a skill, a mechanisable rule into a
+  hook *with a test*. Only a **disposition that has recurred** earns an always-on rule,
+  because everything in the framework file is loaded every session. Every change is a
+  diff the human approves. It does work — three lessons have reached files that are
+  actually read, and one caught its own author an hour after being promoted — but it has
+  run a handful of times, all in sessions that also built it.
 - **n=1.** One user, a few months of history. Everything above is one person's
   experience, not a validated design.
 
@@ -132,8 +147,12 @@ private because its reasoning is entangled with one person's circumstances.
   the flag is visible, the body is already in context. Enforcement has to sit where
   the read happens.
 - **A search index**, which is what makes the vault queryable instead of scannable.
-- **A learning loop** that promotes recorded lessons into rules, with a human gate —
-  the missing half of "it does not learn" above.
+- **A way to test behaviour that lives in prose.** The learning loop stays human-gated
+  precisely because nothing can yet catch a behavioural regression automatically: a
+  capable agent's failure mode is not an error, it is a plausible artifact. Rules that
+  can be mechanised keep moving into hooks, which have tests and cannot be argued out of
+  their answer; what is left is judgment, and the human gate is the design rather than
+  caution about it.
 
 ## Prerequisites
 

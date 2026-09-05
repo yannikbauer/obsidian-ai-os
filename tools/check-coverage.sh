@@ -47,6 +47,31 @@ for e in $tracked; do
     || say "top-level entry neither exported nor declared NOT_EXPORTED: $e"
 done
 
+# 3b. Every skill and tool appears in the README's tree.
+#     This is the check that grep cannot be: the system-impact step greps the docs for
+#     the vocabulary of a change, which finds a mention that went STALE and is blind to
+#     one that is MISSING. A skill that never existed leaves no word to search for, so
+#     the README simply stayed silent about `retro` and `usage` and read as complete.
+#     Absence is only visible when you enumerate the thing itself and ask the document.
+#     Scope matters here: grepping the WHOLE README passes on any passing mention in
+#     prose, so removing a skill from the tree left the check green. It reads the first
+#     fenced block — the tree — and nothing else.
+if [ -f README.md ]; then
+  tree=$(awk '/^```/{n++; next} n==1' README.md)
+  if [ -z "$tree" ]; then
+    say "README has no fenced tree block to check the skills and tools against"
+  else
+    for d in skills/*/; do
+      n=$(basename "$d")
+      printf '%s' "$tree" | grep -Fq "$n/" || say "skill missing from README tree: $n"
+    done
+    for f in tools/*.sh; do
+      [ -e "$f" ] || continue
+      printf '%s' "$tree" | grep -Fq "$(basename "$f")" || say "tool missing from README tree: $f"
+    done
+  fi
+fi
+
 # 4. No prose may CLAIM A COUNT of hooks or gates. Counts drift, and worse, they drift
 #    across units: "five rules" is enforced by four scripts, one of which covers three
 #    rules on its own. The lists in CLAUDE.md and README enumerate instead, which cannot

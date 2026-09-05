@@ -321,4 +321,33 @@ else
 fi
 
 
+# --- check-coverage detects an ABSENT mention, not just a stale one -----------
+# The first version of this check grepped the whole README and stayed green when a
+# skill was deleted from the tree, because the word still appeared in prose. A check
+# that cannot fail is not a check (L005), so the negative case is the real test.
+#
+# The scratch copy is deliberately NOT a git repo: check 3 then reports that it had
+# nothing to check and skips, which is the behaviour a fresh export relies on. Staging
+# a scratch repo would also trip guard-blanket-add.sh — correctly, since that gate
+# matches command syntax and can tell neither a temp tree from this one nor a quoted
+# command from a real one.
+CVTMP=$(mktemp -d)
+cp -R "$HOOKS/../tools" "$HOOKS/../skills" "$HOOKS/../setup" "$HOOKS/../harness" \
+      "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$CVTMP/" 2>/dev/null
+if ( cd "$CVTMP" && ./tools/check-coverage.sh >/dev/null 2>&1 ); then
+  echo "  ok   check-coverage passes on a complete tree"
+else
+  echo "  FAIL check-coverage should pass on a complete copy" >&2; FAIL=1
+  ( cd "$CVTMP" && ./tools/check-coverage.sh ) >&2
+fi
+
+# Delete one skill from the README's tree block only — it stays mentioned in prose.
+grep -v '├── retro/' "$CVTMP/README.md" > "$CVTMP/README.trimmed" && mv "$CVTMP/README.trimmed" "$CVTMP/README.md"
+if ( cd "$CVTMP" && ./tools/check-coverage.sh >/dev/null 2>&1 ); then
+  echo "  FAIL check-coverage missed a skill absent from the README tree" >&2; FAIL=1
+else
+  echo "  ok   check-coverage catches a skill missing from the README tree"
+fi
+
+
 exit $FAIL

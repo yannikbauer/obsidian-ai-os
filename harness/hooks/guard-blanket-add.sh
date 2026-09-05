@@ -15,6 +15,12 @@
 # that document this rule — the skill body containing "never git add -A" was authored
 # through a Bash heredoc. So the pattern requires the command to begin a segment
 # (start of line, or after ; & | && ||), which prose mentions do not.
+#
+# KNOWN FALSE POSITIVE (L013): it still fires on a *quoted* command in command position
+# — editing a script whose string literal contains one, or a test that stages a scratch
+# repo under mktemp. Accepted rather than loosened: the gate cannot tell a temp tree
+# from the real one, and over-firing on scratch work is the cheaper error. To edit such
+# a line, match it by a neighbouring substring rather than spelling the command out.
 . "$(dirname "$0")/lib.sh"
 
 cmd=$(field '.tool_input.command')
