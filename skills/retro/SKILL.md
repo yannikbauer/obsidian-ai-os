@@ -113,16 +113,39 @@ time:
   new folder ship, or is it deliberately left behind?), `publish.sh`. **Do not re-read
   them.** Grep each for the vocabulary of what changed — a `harness/` change greps
   `hook`, `gate`, `Stop`; a new skill greps the skills list and the file tree.
+- **The roadmap needs a sharper signal than grep**, because its staleness does not share
+  vocabulary with the change. An item still sitting in an active tier after quietly
+  shipping, or a `Done` entry that stopped being true, reads as current intent and
+  misleads silently. So instead: **read the item numbers this session's commits cite**
+  (`git log --format=%s <base>..HEAD | grep -oE '#[0-9]+'`) and re-read exactly those
+  items. Precise, cheap, no false positives. Grep the roadmap as well when the change
+  altered something the roadmap argues *about* — an effort estimate, a rejection's
+  *revisit-if*, a dependency between items.
 - **Scoped, only when their subject changed.** A skill's own `SKILL.md`, an
   integration file whose tool behaved differently, `maps/` if the vault's shape moved.
 
 Some of these files do not exist in every install — `docs/` is never exported. A missing
 file is normal, not an error.
 
+**A `Done` entry is written at the END of the session, never at the commit that closes
+the item.** This is ordering, not detection, and no check substitutes for it: an entry
+written when the work "finished" goes stale if the session then keeps going — which is
+the normal case, because shipping something is what reveals the next thing to do. If an
+entry already exists from earlier in the session, **re-read it as a claim and verify it**
+rather than assuming you wrote it correctly.
+
+**Propose new items, never add them.** When a pass finds work it is deliberately not
+doing — a rule that wants a hook, a check that wants writing — that is a roadmap
+candidate, and leaving it in prose is how it stays lost. Propose it with the same diff
+and the same approval as everything else. Which tier it belongs in is the user's call,
+not yours: the roadmap is their statement of intent, and an item's *placement* is the
+judgment it exists to hold.
+
 **Grep only catches staleness that shares vocabulary with the change.** It raises the
-hit rate; it is not a net. When a change alters what the system *claims about itself* —
-a new gate, a new folder, a capability gained or dropped — say so plainly and look
-rather than grepping.
+hit rate; it is not a net. And nothing here can tell you an item is no longer worth
+doing — only that it looks untrue. When a change alters what the system *claims about
+itself* — a new gate, a new folder, a capability gained or dropped — say so plainly and
+look rather than grepping.
 
 **6. Propose.** One numbered item per lesson **and per stale claim**: the statement, the
 kind, the destination, and the actual diff. Then stop and wait.
