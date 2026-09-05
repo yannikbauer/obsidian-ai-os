@@ -9,7 +9,7 @@ An AI operating system, not just a task manager. The default "app" running on it
 - **Identity** — who the user is and how to work with them (`me.md`)
 - **Navigation** — how the vault and external tools are organized (`maps/`, `integrations/`)
 - **Capabilities** — skills for each tool and for cross-tool workflows (`skills/`)
-- **Memory** — a log of what the AI has changed (`history/file-log.md`), continuity between sessions (`history/session-log.md`) and, later, a search index (`databases/`)
+- **Memory** — a log of what the AI has changed (`history/file-log.md`), continuity between sessions (`history/session-log.md`), a ledger of what it has been taught (`history/lessons.md`) and, later, a search index (`databases/`)
 
 ## Layered design
 
@@ -23,7 +23,7 @@ The system separates **generic** from **personal** at every layer. This is what 
 
 **Tools are optional.** A tool is configured iff `integrations/<tool>.md` exists; that file declares its `**Role:**` (`task-system`, `calendar`, `mail`). Skills resolve roles at point of use and degrade gracefully when a role is unfilled — never describe a tool the user has not configured. The `notes` role is the substrate: it is always present and backed by `maps/vault-map.md`, which is why it has no integration file.
 
-Skills contain **generic logic** ("how to operate a task-system's tasks and docs"). Your **specifics** (IDs, workflow, conventions) live in `integrations/`. A skill says *"read `_AI/integrations/<tool>.md` for the user's setup"* rather than hardcoding anything. Keep this separation intact when editing.
+Skills contain **generic logic** ("how to operate a task-system's tasks and docs"). Your **specifics** (IDs, workflow, conventions) live in `integrations/`. A skill says *"read `_AI/integrations/<tool>.md` for the user's setup"* rather than hardcoding anything. Keep this separation intact when editing — and note that **moving** text is when it breaks: relocated text arrives already-approved and gets re-read against its old home's constraints, not its new one (ledger L004).
 
 ## How to operate
 
@@ -33,7 +33,24 @@ Skills contain **generic logic** ("how to operate a task-system's tasks and docs
 4. **Session continuity.** `history/session-log.md` carries state *between* sessions — what the last session did, what's still open, what to be careful with. It is **not** auto-imported: read it when the user resumes work ("continue", "where were we?") or at the start of a planning session, and append a short entry when a session produced state worth carrying forward. Keep it to a few bullets per session; it's continuity, not an archive.
 5. **Log file changes.** `_AI/` is version-controlled by git — its history is the audit trail for the OS itself, so you don't log changes to files under `_AI/`. For changes to **vault notes outside `_AI/`** (which aren't under git), append a timestamped line to `history/file-log.md` (see format there).
 
+7. **Lessons are recorded, not remembered.** When a session teaches something — a
+   correction, a near-miss caught by a hook, a check that failed to catch what it
+   should have — run the `retro` skill. It records the lesson in `history/lessons.md`
+   and applies it where it belongs: a fact about a tool goes to `integrations/`, a
+   workflow step to a skill, a mechanisable rule to a `harness/` hook. **Only a
+   disposition that has recurred earns a rule in this file**, because everything here
+   is loaded on every session and the token budget is what makes the OS cheap. The
+   ledger is not auto-imported; like `session-log.md`, it is read when needed.
+
 6. **Git lives in `_AI/`, not the vault root.** The vault root is intentionally *not* a repo — only `_AI/` is. Run every git command from `_AI/` (`cd "<vault>/_AI"`). If git reports "not a git repository" or appears to have no remote, you are in the wrong directory — re-check from `_AI/` before concluding anything. Because `_AI/` holds personal files (`me.md`, `integrations/`), its remote must be **private**.
+
+8. **Verification.** Two failure modes, both recurring (ledger L001, L003).
+   **Don't answer a checkable question from memory** — if a command would settle it,
+   run the command; absence claims especially ("there's nothing sensitive here",
+   "that hook won't load yet"). **And a check is only as good as the representation it
+   runs on** — a clean diff over a lossy export format, a content scan that cannot see
+   metadata, a count of `Write` calls in a session that edited through the shell.
+   Before trusting a green result, name what it actually measured.
 
 ## Safety rules (always apply)
 
@@ -52,17 +69,22 @@ Skills contain **generic logic** ("how to operate a task-system's tasks and docs
 - **Don't restructure without permission.** No new folders, no reorganizing, no bulk reformatting unless explicitly asked.
 - **Financial/legal caution.** Don't execute trades, move money, or place orders. Provide information; let the user act.
 
-**Four of these rules are enforced by hooks**, not by judgment — they fail closed:
-the task-system whole-page `replace`, sending mail, writing into read-only zones, and
-rewriting live query blocks. A hook firing means a rule was about to be broken: read
+**These rules are enforced by hooks**, not by judgment — they fail closed:
+the task-system whole-page `replace`, sending mail, writing into read-only zones,
+rewriting live query blocks, and blanket `git add -A` staging in a tree more than one
+session writes to. A hook firing means a rule was about to be broken: read
 the reason and take the alternative it names, rather than working around it. The
 hooks are a floor, not a substitute for the human review gate — and they fail *open*,
 so a hook that cannot run silently stops protecting anything. `install.sh` checks for
 its `jq` dependency for that reason. See `harness/README.md`.
 
-A `Stop` hook additionally refuses to end a session while a vault-note change is
-missing from `history/file-log.md`, which is why rule 5 above is now mechanical
-rather than remembered.
+Two `Stop` hooks sit alongside them, with deliberately opposite postures. One
+**refuses** to end a session while a vault-note change is missing from
+`history/file-log.md` — which is why rule 5 above is mechanical rather than
+remembered. The other only **asks**: when a session shows mechanical signs of having
+taught something (a denial fired, corrections, failed calls, framework edits), it
+prompts once for a retro. Rule 7 depends on noticing, and noticing is the part a
+human should not have to do from memory.
 
 ## Growing the OS
 

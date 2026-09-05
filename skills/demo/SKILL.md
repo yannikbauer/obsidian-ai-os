@@ -28,7 +28,7 @@ sets every rule below.
    classes renders as "a health appointment, 14:00" and nothing more.
 3. **Load the private block-list if it exists.** If `_AI/leak-patterns.local` is
    present, read it and treat every pattern as a substring that must not appear in
-   any output. It is gitignored and never exported; absence is normal, not an error.
+   any output. It is private and never exported (the export is an allowlist and leaves every `.local` file behind); absence is normal, not an error.
 4. **Pre-flight gate — run it before anything reaches the screen.** Read what is
    actually on the board for the demo window, then ask the *user* (not the
    audience): "Here is what today's data contains — anything you want kept off

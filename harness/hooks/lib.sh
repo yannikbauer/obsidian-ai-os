@@ -23,6 +23,15 @@ field() { # field <jq-path> — prints the value, or nothing
 }
 
 deny() { # deny <reason> — emits the PreToolUse denial and stops the tool call
+  # Leave a trace first. A denial is the strongest evidence that a session had something
+  # to teach, and it appears NOWHERE in Claude Code's transcript — verified 2026-09-05.
+  # Best-effort by design: nothing here may prevent or delay the denial itself.
+  _sid=$(field '.session_id')
+  if [ -n "$_sid" ] && mkdir -p "$AIOS_DIR/tmp" 2>/dev/null; then
+    printf '%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(field '.tool_name')" \
+      "$(printf '%s' "$1" | tr '\n' ' ' | cut -c1-200)" \
+      >> "$AIOS_DIR/tmp/denies-$_sid.log" 2>/dev/null
+  fi
   printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":%s}}\n' \
     "$(printf '%s' "$1" | /usr/bin/jq -Rs .)"
   exit 2

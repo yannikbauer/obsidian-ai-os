@@ -24,7 +24,7 @@ The default app running on the AI OS. It figures out which roles to involve and 
 
 ## Core commands
 
-**"Plan my week" / "Start my week"** — 1) read the current weekly note (pattern in `maps/vault-map.md`; don't create it — the template does). 2) read the task-system's current + week views. 3) fetch this week's events across all writable calendars. 4) check public holidays if the calendar integration lists a holiday calendar. 5) scan recent mail for anything time-sensitive (skip if no mail role). 6) synthesize: committed (calendar) + to-do (task-system) + focus (goals) + mail items; suggest how to distribute tasks across free days. Offer to populate the weekly note's Focus.
+**"Plan my week" / "Start my week"** — 1) read the current weekly note (pattern in `maps/vault-map.md`; don't create it — the template does). 2) read the task-system's current + week views. 3) fetch this week's events across all writable calendars, **plus the following week** — a deadline that reorders a week characteristically sits just past its edge (ledger L002). 4) check public holidays if the calendar integration lists a holiday calendar. 5) scan recent mail for anything time-sensitive (skip if no mail role). 6) synthesize: committed (calendar) + to-do (task-system) + focus (goals) + mail items; suggest how to distribute tasks across free days. Offer to populate the weekly note's Focus.
 
 **"What's on my plate?" (today / this week)** — calendar events for the period across all writable calendars + current/day items from the task-system + this week's Focus from the weekly note. Present grouped by time-of-day (today) or by day (week).
 

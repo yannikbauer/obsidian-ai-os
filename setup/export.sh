@@ -37,8 +37,20 @@ cp    "$AI_DIR/.gitignore"     "$TARGET/.gitignore"
 cp    "$AI_DIR/LICENSE"        "$TARGET/LICENSE"
 cp -R "$AI_DIR/skills"        "$TARGET/skills"
 cp -R "$AI_DIR/harness"       "$TARGET/harness"
+# tools/ ships: skills call these scripts by path, so a shareable skill whose helper
+# stays behind is a skill that is broken on arrival. Caught 2026-09-05 — an allowlist
+# excludes a new folder by default, which is the safe failure for personal data and
+# the silent one for generic code.
+[ -d "$AI_DIR/tools" ] && cp -R "$AI_DIR/tools" "$TARGET/tools"
 cp -R "$AI_DIR/templates"     "$TARGET/templates"
 cp -R "$AI_DIR/setup"         "$TARGET/setup"
+
+# DECLARED EXCLUSIONS. Everything tracked at the top level is either copied above or
+# named here — tools/check-coverage.sh enforces that, so a new top-level file or folder
+# forces a deliberate decision instead of inheriting the allowlist's silent default.
+# (Ledger L008: an allowlist's safe default for personal data is its silent default for
+# generic code — that is how tools/ nearly shipped a skill without its helper.)
+# NOT_EXPORTED: me.md maps integrations history tmp databases docs .github correction-words.local leak-allow.local leak-patterns.local publish.local readonly-zones.local
 
 # strip any stray junk
 find "$TARGET" -name '.DS_Store' -delete

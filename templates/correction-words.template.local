@@ -1,0 +1,17 @@
+# correction-words.local — what counts as the user correcting the AI.
+#
+# Read by tools/session-digest.sh, which feeds harness/hooks/suggest-retro.sh: a
+# session with corrections in it is a session that probably taught something.
+#
+# One extended-regex alternative per line. Blank lines and #-comments are ignored.
+# If this file exists it REPLACES the built-in English defaults entirely — so if you
+# add a second language, re-list the English terms you still want.
+#
+# Keep it conservative. A false positive costs one wasted question; a nudge that fires
+# on every session is a nudge that gets switched off.
+#
+# Example, for someone who works in two languages (English and German shown):
+#
+# ^(no|nope|nein|not quite|wrong|falsch)\b
+# \b(actually|instead|revert|undo|misread|incorrect|not what i|rather than)\b
+# \b(eigentlich|stattdessen|lieber|nicht so|doch nicht)\b

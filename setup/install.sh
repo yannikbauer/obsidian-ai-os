@@ -123,6 +123,8 @@ scaffold "templates/vault-map.template.md"               "maps/vault-map.md"
 # history/ must exist before the first logged change, or rule 5 fails on first use
 scaffold "templates/file-log.template.md"                "history/file-log.md"
 scaffold "templates/session-log.template.md"             "history/session-log.md"
+# the learning ledger (framework rule 7) — the retro skill has nowhere to write without it
+scaffold "templates/lessons-log.template.md"             "history/lessons.md"
 # tmp/ is gitignored, so a fresh clone has no folder — scaffold its README to create it
 scaffold "templates/tmp-readme.template.md"              "tmp/README.md"
 # docs/ is never exported, so a fresh clone has no folder and no hint that it is a
@@ -136,6 +138,10 @@ scaffold "templates/leak-patterns.template.local"        "leak-patterns.local"
 scaffold "templates/readonly-zones.template.local"       "readonly-zones.local"
 scaffold "templates/leak-allow.template.local"           "leak-allow.local"
 scaffold "templates/publish.template.local"              "publish.local"
+# all-comments by default, so the built-in English vocabulary stays in force until
+# someone actually edits it — but the file exists, which is the only way anyone learns
+# the knob is there
+scaffold "templates/correction-words.template.local"      "correction-words.local"
 
 # integrations/ stays EMPTY on purpose: in this framework a file's existence is the
 # on-switch, so a placeholder .md here would read as a half-configured tool. The

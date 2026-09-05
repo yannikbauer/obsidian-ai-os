@@ -352,11 +352,12 @@ schedule or on a push.
 | Needs a secret | **no** — the public repo is readable anonymously | yes, `PUBLIC_REPO_TOKEN` |
 | Produces | the exact public-facing diff, in the run summary and as an artifact | a public commit |
 
-Both run the same four gates first:
+Both run the same gates first:
 
 | Gate | Catches |
 |---|---|
 | `harness/tests/run.sh` | a broken hook — they fail *open*, so breakage is otherwise silent |
+| `actionlint` | a workflow that is itself broken — the thing that runs every other gate |
 | `export.sh` leak check | identifiers you listed in `leak-patterns.local` |
 | **gitleaks** | the generic classes you would not have predicted — API keys, tokens, private keys |
 | `install.sh` into a scratch vault | an export that passes every check and then does not install |
