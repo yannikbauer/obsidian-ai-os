@@ -216,8 +216,40 @@ fi
 # meaningless without access to the private repo, so it leaks nothing, but it
 # answers "which version is this?" when the two drift.
 SRC_SHA="$(cd "$AI_DIR" && git rev-parse --short HEAD 2>/dev/null || echo unknown)"
-git -c "user.name=$PUBLIC_GIT_NAME" -c "user.email=$PUBLIC_GIT_EMAIL" \
-    commit -q -m "Sync AI OS framework (source $SRC_SHA)"
+
+# Build a body from the private commit subjects since the last publish, so the
+# public history says what changed instead of repeating "Sync AI OS framework".
+#
+# Two constraints make this less trivial than it looks:
+#   1. Only commits touching EXPORTED paths belong here. A roadmap or session-log
+#      commit changed nothing publicly, and its subject is private.
+#   2. A commit subject is metadata, so the export's leak check never saw it.
+#      Scan the generated text before it becomes a permanent public commit --
+#      this is exactly the class of leak that has bitten this pipeline before.
+BODY=""
+LAST_SRC="$(git log -1 --format=%s 2>/dev/null \
+            | sed -n 's/.*(source \([0-9a-f]\{7,\}\))$/\1/p')"
+if [ -n "$LAST_SRC" ] && (cd "$AI_DIR" && git cat-file -e "${LAST_SRC}^{commit}" 2>/dev/null); then
+  CAND="$(cd "$AI_DIR" && git log --reverse --format='- %s' "${LAST_SRC}..HEAD" -- \
+            CLAUDE.md README.md LICENSE .gitignore skills harness templates setup 2>/dev/null)"
+  if [ -n "$CAND" ]; then
+    printf '%s\n' "$CAND" > "$WORK/msg.txt"
+    if bash "$SCRIPT_DIR/leak-check.sh" "$WORK/msg.txt" >/dev/null 2>&1; then
+      BODY="$CAND"
+    else
+      echo "  (commit subjects held a personal token — using the plain message;"
+      echo "   the published FILES are unaffected, only this message)"
+    fi
+  fi
+fi
+
+if [ -n "$BODY" ]; then
+  git -c "user.name=$PUBLIC_GIT_NAME" -c "user.email=$PUBLIC_GIT_EMAIL" \
+      commit -q -m "Sync AI OS framework (source $SRC_SHA)" -m "$BODY"
+else
+  git -c "user.name=$PUBLIC_GIT_NAME" -c "user.email=$PUBLIC_GIT_EMAIL" \
+      commit -q -m "Sync AI OS framework (source $SRC_SHA)"
+fi
 
 if [ -n "$BRANCH" ]; then
   # Force is correct here and only here: the sync branch is a machine-owned

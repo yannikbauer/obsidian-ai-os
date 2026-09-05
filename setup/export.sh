@@ -44,87 +44,16 @@ cp -R "$AI_DIR/setup"         "$TARGET/setup"
 find "$TARGET" -name '.DS_Store' -delete
 
 # --- leak check --------------------------------------------------------------
-# Fail loudly if any known-personal token slipped into the export.
-# Patterns come from _AI/leak-patterns.local. It is NOT copied into the export
-# (the copy list above is an allowlist), but it IS tracked in this repo, on
-# purpose: a fresh clone then gets a working leak check instead of silently
-# degrading to the generic patterns below. That is safe only because this
-# remote is private and already holds me.md and integrations/ -- the file adds
-# no exposure those do not. If this repo is ever made public, that stops being
-# true for every one of those files, not just this one.
-# plus a couple of built-in generic patterns. Edit that file as your IDs change.
-PATTERNS=()
-PATFILE="$AI_DIR/leak-patterns.local"
-if [ -f "$PATFILE" ]; then
-  while IFS= read -r line; do
-    [ -z "$line" ] && continue
-    case "$line" in \#*) continue ;; esac
-    PATTERNS+=("$line")
-  done < "$PATFILE"
-else
-  echo "  (no leak-patterns.local found — using built-in generic checks only)"
-fi
-# Built-in generic patterns (safe against template placeholders like <your email>)
-PATTERNS+=("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")   # any real email
-PATTERNS+=("@group\.calendar\.google\.com")                    # google calendar ids
-
-# --- deliberate attribution --------------------------------------------------
-# Some personal tokens BELONG in a public repo: the copyright holder's name in
-# LICENSE, the public repo URL in README. Both match leak-patterns.local, so
-# without an exemption the export could never carry a licence or an install URL.
-#
-# leak-allow.local lists those exact literals. They are deleted from a matched
-# line before the line is re-tested, so "Yannik Bauer" in LICENSE passes while
-# any OTHER occurrence of [Yy]annik in the same file still fails. Widening a
-# pattern would have disabled the check globally; this does not.
-#
-# Fixed-string via awk index(), not regex -- no escaping, and an allow entry can
-# never accidentally match more than itself.
-ALLOWFILE="$AI_DIR/leak-allow.local"
-strip_allowed () {
-  awk -v allowfile="$ALLOWFILE" '
-    BEGIN {
-      n = 0
-      while ((getline line < allowfile) > 0) {
-        if (line ~ /^[ \t]*$/ || line ~ /^#/) continue
-        L[++n] = line
-      }
-      close(allowfile)
-    }
-    {
-      for (i = 1; i <= n; i++)
-        while ((p = index($0, L[i])) > 0)
-          $0 = substr($0, 1, p - 1) substr($0, p + length(L[i]))
-      print
-    }
-  '
-}
-
+# Fail loudly if any known-personal token slipped into the export. The scan lives
+# in leak-check.sh so publish.sh can run the identical check over things that are
+# not files in the tree -- generated commit messages, specifically.
 echo "Running leak check..."
-if [ -f "$ALLOWFILE" ]; then
-  echo "  (attribution allowlist: $(grep -cvE '^[[:space:]]*(#|$)' "$ALLOWFILE") literal(s))"
-fi
-LEAKED=0
-for p in "${PATTERNS[@]}"; do
-  # grep from INSIDE $TARGET so output paths are relative: an absolute path can
-  # itself contain a personal token (e.g. /Users/<name>/...) and would otherwise
-  # trip the re-test on every single line.
-  hits="$(cd "$TARGET" && grep -rEIn --binary-files=without-match -- "$p" . 2>/dev/null \
-            | strip_allowed \
-            | grep -E -- "$p" || true)"
-  if [ -n "$hits" ]; then
-    echo "  LEAK: pattern '$p' matched in export:" >&2
-    printf '%s\n' "$hits" >&2
-    LEAKED=1
-  fi
-done
-if [ "$LEAKED" -ne 0 ]; then
+if ! bash "$SCRIPT_DIR/leak-check.sh" "$TARGET"; then
   echo >&2
   echo "! Personal data detected in export. Aborting; NOT initializing git." >&2
   echo "! Remove the offending content and re-run." >&2
   exit 2
 fi
-echo "  clean — no personal tokens found."
 
 # --- fresh git history -------------------------------------------------------
 # Pin the commit identity rather than inheriting ~/.gitconfig. Two reasons, and
