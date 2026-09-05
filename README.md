@@ -97,6 +97,44 @@ why they are created rather than committed:
 Both symlinks point *into* the repo, so the OS and the harness it runs on are
 version-controlled together while the vault root stays plain-local.
 
+## What it can't do yet
+
+Stated up front, because the honest version is more useful than a feature list — and
+because these are design decisions, not a backlog of oversights.
+
+- **Nothing runs on a schedule.** Every workflow starts because a human opened a
+  session. No cron, no daemon, no background agent watching your calendar.
+- **Writes to a task system are deliberately constrained.** A test showed that
+  rewriting a whole page silently destroys rich content — task and doc references
+  flatten to plain links on read, so writing the page back replaces every one of them.
+  The OS appends, and proposes the rest as text for you to apply. That is less
+  automation than was built, kept off on purpose.
+- **There is no search index.** Finding something means scanning. This is the largest
+  open item.
+- **It does not learn.** Sessions record what was decided and what went wrong, but
+  nothing feeds that back into behaviour. It is a well-organised archive, not a
+  learning system.
+- **n=1.** One user, a few months of history. Everything above is one person's
+  experience, not a validated design.
+
+## Where it's going
+
+Direction rather than plan — no dates, no ordering, and the detailed roadmap stays
+private because its reasoning is entangled with one person's circumstances.
+
+- **A local model tier for bulk vault work.** Mechanical relabelling across hundreds
+  of notes, human-gated per batch and snapshotted in git. Running it on a local model
+  *dissolves* the privacy blocker rather than working around it — nothing leaves the
+  machine, so the sensitivity question and the cost question land on the same answer.
+- **A sensitivity boundary enforced at the tool layer.** The obvious design does not
+  work, which is the interesting part: a `sensitive: true` flag in frontmatter cannot
+  gate anything, because a read returns frontmatter and body atomically — by the time
+  the flag is visible, the body is already in context. Enforcement has to sit where
+  the read happens.
+- **A search index**, which is what makes the vault queryable instead of scannable.
+- **A learning loop** that promotes recorded lessons into rules, with a human gate —
+  the missing half of "it does not learn" above.
+
 ## Prerequisites
 
 - **Claude Code** installed (`npm i -g @anthropic-ai/claude-code`, or via the desktop app). Verify with `claude --version`.
