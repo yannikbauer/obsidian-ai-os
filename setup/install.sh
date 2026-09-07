@@ -120,6 +120,7 @@ scaffold () {  # $1 = template path (relative to _AI), $2 = target (relative to 
 }
 scaffold "templates/me.template.md"                      "me.md"
 scaffold "templates/vault-map.template.md"               "maps/vault-map.md"
+scaffold "templates/workflow-map.template.md"           "maps/workflow-map.md"
 # history/ must exist before the first logged change, or rule 5 fails on first use
 scaffold "templates/file-log.template.md"                "history/file-log.md"
 scaffold "templates/session-log.template.md"             "history/session-log.md"
@@ -142,6 +143,7 @@ scaffold "templates/publish.template.local"              "publish.local"
 # someone actually edits it — but the file exists, which is the only way anyone learns
 # the knob is there
 scaffold "templates/correction-words.template.local"      "correction-words.local"
+scaffold "templates/clickup-replace-allow.template.local" "clickup-replace-allow.local"
 
 # integrations/ stays EMPTY on purpose: in this framework a file's existence is the
 # on-switch, so a placeholder .md here would read as a half-configured tool. The

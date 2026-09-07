@@ -62,11 +62,40 @@ zexpect 0 /v/Archive/old.md      "config replaces the defaults, not extends them
 rm -rf "$ZTMP"
 
 # --- guard-clickup ---
-expect 2 hooks/guard-clickup.sh \
-  '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"content_edit_mode":"replace","content":"x"}}'
-expect 0 hooks/guard-clickup.sh \
-  '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"content_edit_mode":"append","content":"x"}}'
+# Runs against a TEMP tree with its own allowlist, never the real one. Two reasons: the
+# fixture must not depend on this vault's configuration, and hardcoding real page ids into
+# a file that SHIPS would put the owner's document tree in the public export. The leak
+# check catches that pattern, but a fixture that only passes because another gate stops it
+# is a fixture written wrong.
+KTMP=$(mktemp -d); mkdir -p "$KTMP/_AI/harness/hooks"
+cp "$HOOKS/hooks/guard-clickup.sh" "$HOOKS/hooks/lib.sh" "$KTMP/_AI/harness/hooks/"
+printf '# fixture allowlist\nPAGE-ALLOWED\n' > "$KTMP/_AI/clickup-replace-allow.local"
+kexpect() { # kexpect <want-exit> <json> <label>
+  printf '%s' "$2" | CLAUDE_PROJECT_DIR="$KTMP" "$KTMP/_AI/harness/hooks/guard-clickup.sh" >/dev/null 2>&1
+  kgot=$?
+  if [ "$kgot" -eq "$1" ]; then echo "  ok   guard-clickup: $3"
+  else echo "  FAIL guard-clickup: $3 — wanted exit $1, got $kgot" >&2; FAIL=1; fi
+}
+kexpect 2 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-OTHER","content_edit_mode":"replace","content":"x"}}' \
+  "denies replace on a page that is not allowlisted"
+kexpect 0 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-OTHER","content_edit_mode":"append","content":"x"}}' \
+  "allows append"
+# The tool's schema DEFAULTS content_edit_mode to "replace". A gate that tests only for an
+# explicit "replace" misses the likeliest destructive call shape — omitting the field.
+kexpect 2 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-OTHER","content":"x"}}' \
+  "treats an omitted content_edit_mode as replace"
+# ...and the ban is conditional, not absolute: integrations/ allowlists one staging page,
+# and the old absolute hook denied it while its own message said to use a staging page (L006).
+kexpect 0 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-ALLOWED","content_edit_mode":"replace","content":"x"}}' \
+  "allows replace on the allowlisted page"
+kexpect 0 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-OTHER","name":"renamed"}}' \
+  "a rename with no content is not a rewrite"
+# With no allowlist at all — a fresh install — every replace is denied. That is the safe default.
+rm -f "$KTMP/_AI/clickup-replace-allow.local"
+kexpect 2 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-ALLOWED","content_edit_mode":"replace","content":"x"}}' \
+  "denies everything when no allowlist exists"
 expect 0 hooks/guard-clickup.sh 'not json'
+rm -rf "$KTMP"
 
 # --- guard-mail ---
 # Reaching this script at all is the violation: the matcher decides what arrives.
@@ -238,6 +267,18 @@ br=$("$DIGEST" --json --transcript "$BTMP/bashread.jsonl" 2>/dev/null | /usr/bin
 [ "$br" = "0" ] && echo "  ok   session-digest does not count a Bash read as a write" \
                 || { echo "  FAIL session-digest counted a read as a write — wanted 0, got ${br:-<none>}" >&2; FAIL=1; }
 
+# ...and `2>&1` is not a write either. The mutating-verb clause accepted ANY `>` followed
+# by a non-pipe run ending at an _AI/ path, so every stderr-redirecting read of a framework
+# file scored as a write. Found 2026-09-07 by printing the matches the Stop hook had just
+# counted: both were `ls ... 2>&1 && ... _AI/docs/roadmap.md`. Same shape as L003 — the check
+# was watching for a `>` character, not for a file being written.
+printf '%s\n' \
+  '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"ls -d /v/notes 2>&1 && awk /x/ /v/_AI/docs/roadmap.md"}}]}}' \
+  > "$BTMP/bashfd.jsonl"
+bf=$("$DIGEST" --json --transcript "$BTMP/bashfd.jsonl" 2>/dev/null | /usr/bin/jq -r .framework_writes)
+[ "$bf" = "0" ] && echo "  ok   session-digest does not count 2>&1 as a framework write" \
+                || { echo "  FAIL session-digest counted a stderr redirect as a write — wanted 0, got ${bf:-<none>}" >&2; FAIL=1; }
+
 # A skill body injected as a user-role entry is not the human speaking. Counting these
 # reported 204 "human turns" for a session with 5.
 printf '%s\n' \
@@ -349,5 +390,63 @@ else
   echo "  ok   check-coverage catches a skill missing from the README tree"
 fi
 
+
+
+# --- check-coverage: the two sets that drifted on 2026-09-07 -------------------
+# A new integration pack and a new .local knob both reached the README tree late, in the
+# same session, and `correction-words.local` had never reached it at all -- found by this
+# check on its first run. Enumerated from templates/ (what SHIPS), never from the user's
+# own integrations/ or *.local: holding a generic, exported README to a personal file list
+# would force it to name the user's tools, which is the leak the architecture prevents (L004).
+CC3=$(mktemp -d)
+mkdir -p "$CC3/templates/integrations" "$CC3/harness" "$CC3/tools" "$CC3/setup"
+cp "$HOOKS/../tools/check-coverage.sh" "$CC3/tools/"
+: > "$CC3/templates/integrations/todoist.template.md"
+: > "$CC3/harness/settings.json"; : > "$CC3/setup/export.sh"; : > "$CC3/setup/install.sh"
+printf '# R\n\n```\n_AI/\n├── integrations/\n```\n' > "$CC3/README.md"
+cc3out=$(cd "$CC3" && sh tools/check-coverage.sh 2>&1)
+case "$cc3out" in
+  *"integration pack missing from README tree: todoist.md"*)
+    echo "  ok   check-coverage catches an integration pack missing from the README tree" ;;
+  *) echo "  FAIL check-coverage missed an unlisted integration pack" >&2; FAIL=1 ;;
+esac
+# ...and it must go green once the tree names it, or the check is just always-red.
+printf '# R\n\n```\n_AI/\n├── integrations/\n│   └── todoist.md\n```\n' > "$CC3/README.md"
+cc4out=$(cd "$CC3" && sh tools/check-coverage.sh 2>&1)
+case "$cc4out" in
+  *"integration pack missing"*) echo "  FAIL check-coverage still complains after the README lists it" >&2; FAIL=1 ;;
+  *) echo "  ok   check-coverage passes once the README tree lists the pack" ;;
+esac
+rm -rf "$CC3"
+
+
+# --- check-coverage: rules cited by ordinal ----------------------------------
+# Inserting one rule into CLAUDE.md on 2026-09-07 broke two cross-references and left a
+# duplicate ordinal in the same list; a third was missed by a case-sensitive grep and
+# found by this check on its first run. Scope is live prose only — history/ is an
+# append-only record and docs/ is dated, so a number there was true when written and
+# flagging it would be the rule that fires on legitimate work (L006).
+CC5=$(mktemp -d)
+mkdir -p "$CC5/harness" "$CC5/tools" "$CC5/setup"
+cp "$HOOKS/../tools/check-coverage.sh" "$CC5/tools/"
+: > "$CC5/harness/settings.json"; : > "$CC5/setup/export.sh"; : > "$CC5/setup/install.sh"
+printf '# f\n\nSee rule 5 above.\n' > "$CC5/CLAUDE.md"
+case "$(cd "$CC5" && sh tools/check-coverage.sh 2>&1)" in
+  *"cites a rule by ordinal"*) echo "  ok   check-coverage catches a rule cited by ordinal" ;;
+  *) echo "  FAIL check-coverage missed an ordinal rule reference" >&2; FAIL=1 ;;
+esac
+# Case-insensitive: the miss that got through was "Rule 7", not "rule 7".
+printf '# f\n\nRule 7 depends on noticing.\n' > "$CC5/CLAUDE.md"
+case "$(cd "$CC5" && sh tools/check-coverage.sh 2>&1)" in
+  *"cites a rule by ordinal"*) echo "  ok   check-coverage catches a capitalised ordinal reference" ;;
+  *) echo "  FAIL check-coverage is case-sensitive — the exact miss of 2026-09-07" >&2; FAIL=1 ;;
+esac
+# ...and naming the rule instead must pass, or the check just bans the word "rule".
+printf '# f\n\nSee the *Log file changes* rule above.\n' > "$CC5/CLAUDE.md"
+case "$(cd "$CC5" && sh tools/check-coverage.sh 2>&1)" in
+  *"cites a rule by ordinal"*) echo "  FAIL check-coverage flags a rule referred to by name" >&2; FAIL=1 ;;
+  *) echo "  ok   check-coverage accepts a rule referred to by name" ;;
+esac
+rm -rf "$CC5"
 
 exit $FAIL

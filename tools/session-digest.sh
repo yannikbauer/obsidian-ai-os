@@ -12,7 +12,7 @@
 # happened. A learning loop that trains on its own summary learns its own blind spots.
 #
 # Output is a tmp/ artifact by convention — it quotes vault content verbatim (diary,
-# health, finances), so it is never committed. See docs/work/2026-09-05-retro.md D6.
+# health, finances), so it is never committed. See docs/working-notes/2026-09-05-retro.md D6.
 set -u
 
 DIR="$HOME/.claude/projects"
@@ -120,7 +120,9 @@ tool_calls() {
 # through Bash heredocs — the signal was watching one representation of the act and
 # missing another. So: Write/Edit file paths, plus Bash commands that redirect into or
 # rewrite an _AI/ path. The Bash clause requires a mutating verb, so reading a file
-# with cat does not count as writing it.
+# with cat does not count as writing it. The redirect clause excludes `&` as well as `|`:
+# `2>&1` is a `>`, and without that exclusion every stderr-redirecting READ of an _AI/ path
+# scored as a write (found 2026-09-07; fixture in harness/tests/run.sh).
 framework_writes() {
   /usr/bin/jq -r 'select(.type=="assistant") | .message.content[]?
     | select(.type=="tool_use")
@@ -128,7 +130,7 @@ framework_writes() {
       elif .name=="Bash" then
         ((.input.command // "")
          | select(test("_AI/|AIOS_DIR|\\$AI_DIR"))
-         | select(test(">>?[[:space:]]*[\"'"'"']?[^|]*_AI/|sed -i|tee |^\\s*(cp|mv)\\b|python3?[[:space:]]|write_text"))
+         | select(test(">>?[[:space:]]*[\"'"'"']?[^&|]*_AI/|sed -i|tee |^\\s*(cp|mv)\\b|python3?[[:space:]]|write_text"))
          | "Bash: " + (.[0:80]))
       else empty end' "$TRANSCRIPT" 2>/dev/null | grep -E '/_AI/|^Bash: '
 }

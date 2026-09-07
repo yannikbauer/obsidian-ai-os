@@ -11,6 +11,7 @@ The default app running on the AI OS. It figures out which roles to involve and 
 ## Context to load
 
 - **Always available** (imported at session start): `_AI/me.md`, `_AI/maps/vault-map.md`, `_AI/CLAUDE.md`.
+- **Read `_AI/maps/workflow-map.md` at the start of any planning or review command**, and whenever two systems disagree. It names which role is authoritative per concern and which surfaces are merely *derived* — so a conflict is resolved by rule instead of by asking. If it is absent, fall back to asking the user which source to believe.
 - **Resolve roles at point of use.** List `_AI/integrations/*.md` and read each file's `**Role:**` line to build the role → tool map. Roles are `task-system`, `calendar`, `mail`. The `notes` role is always filled by the vault itself (see `maps/vault-map.md`).
 - **Then load only what the command needs** — read the integration file for each role the command actually uses. Don't guess IDs; don't preload.
 - **If a role is unfilled**, skip that step, say so once and briefly, and carry on. Never describe a tool the user has not configured.
@@ -43,7 +44,12 @@ the user's to answer, and the write happens after they have answered.
    earlier run, append only the new ones. Never invent a parent for an orphaned child.
 3. **Score the Focus.** Compare the beginning-of-week Focus against what actually happened.
    State the count plainly (e.g. "4 of 6"), and say which slipped and why if the calendar or
-   the archive shows it.
+   the archive shows it. **Score it yourself and propose the ticks** — the user does not need
+   to mark Focus items done before invoking this; that duplicates work you are about to do.
+   **Take each completion date from the archive's day header, never from when the box was
+   ticked.** A batch of items ticked in one sitting all carry that day's date, which silently
+   turns the note from a record of the week into a record of the review. Correcting them is
+   part of this step.
 4. **Recap the week back to them** — days as headers, then name the *threads* that ran
    across the week rather than relisting items. This is where the value is: the user already
    knows what they did, not what it added up to.
@@ -62,6 +68,20 @@ the user's to answer, and the write happens after they have answered.
 
 Corrections the user makes to your draft are data: if they strike an item you inferred
 ("didn't attend"), drop it silently and don't re-propose it.
+
+**File an item by the date it happened, never by the note under discussion.** On a review day
+two weeks are open at once — the one being closed and the one starting — and anything the user
+mentions *while* discussing last week still belongs to whichever week actually contains it.
+The prompt's context is the wrong clock; the calendar is the right one.
+
+**What the user should — and should not — do before invoking this.** The split is set by what
+the task-system's API permits, not by preference: where checking a box or inserting under a
+section needs a whole-page rewrite that the write rules forbid, those steps are structurally
+the user's. Theirs: move finished items into the done-items archive, clear the day buckets.
+Yours: read the archive, sync `# Tasks done`, score the Focus, propose next week. Theirs
+again, afterwards: merge your staged proposals into the authoritative surface, then clear the
+archive. **Ask them not to clear the archive or pre-fill the coming week's items first** — the
+archive is your only input, and a pre-filled week is one you cannot plan against cleanly.
 
 Finally, **ask** whether to clear the done-items archive, or whether they will. Follow the
 standing answer in the integration file if there is one.

@@ -50,7 +50,7 @@ cp -R "$AI_DIR/setup"         "$TARGET/setup"
 # forces a deliberate decision instead of inheriting the allowlist's silent default.
 # (Ledger L008: an allowlist's safe default for personal data is its silent default for
 # generic code — that is how tools/ nearly shipped a skill without its helper.)
-# NOT_EXPORTED: me.md maps integrations history tmp databases docs .github correction-words.local leak-allow.local leak-patterns.local publish.local readonly-zones.local
+# NOT_EXPORTED: me.md maps integrations history tmp databases docs .github correction-words.local leak-allow.local leak-patterns.local publish.local readonly-zones.local clickup-replace-allow.local
 
 # strip any stray junk
 find "$TARGET" -name '.DS_Store' -delete

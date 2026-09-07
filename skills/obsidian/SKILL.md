@@ -8,6 +8,15 @@ description: >
 
 Read/write access to the user's Obsidian vault (plain markdown files). This skill is generic; the specific folder layout, prefixes, tags, and conventions live in **`_AI/maps/vault-map.md`** — read it before working in the vault.
 
+**Route: disk by default, API only for what disk cannot do.** The vault is files, and the filesystem is the faster, tokenless route that also works while the app is closed — so content reads and writes go through disk. Some notes tools additionally expose a **local API** (a command endpoint, a URI scheme, a plugin server). If `_AI/integrations/<notes-tool>.md` exists it documents that layer and the exact endpoints; if it does not, there is no API and disk is the only route — which costs no capability, only the four items below. Reach for the API only to:
+
+1. **Run a template.** Template blocks are code the *app* evaluates; a file written to disk gets none of it. Never hand-write a note whose template the app can render — trigger the app's own create-note command and let it render.
+2. **Execute an app command** that has no filesystem equivalent.
+3. **Patch one section** of a note without rewriting the file — the safe way to edit a note the user may have open.
+4. **Ask the app what it knows** — search, tags, metadata — rather than re-deriving it by grepping. What the plugin returns is what the user sees; what grep returns is your reconstruction of it.
+
+**One writer per file.** API writes and disk writes are two uncoordinated writers with no locking — pick one route per write, never both in one operation. And **the API needs the app running**, so nothing scheduled, pushed or headless may depend on it.
+
 ## Core principles
 
 - **Preserve existing patterns.** Match the style of surrounding notes. Don't introduce new formatting, heading, or organizational schemes unprompted.
@@ -32,7 +41,7 @@ Read/write access to the user's Obsidian vault (plain markdown files). This skil
 ## Edge cases
 
 - Unsure where a note belongs → the default notes folder from `vault-map.md`.
-- Creating a weekly note → follow the exact filename pattern and section structure given in `vault-map.md`; don't invent either. The user usually creates these via Templater, so check before creating one at all.
+- Creating a periodic note (weekly/monthly/…) → **prefer the app's own create-note command** via the API when one is configured; it renders the template properly and puts the file in the right place, so there is nothing to imitate and nothing to drift. Only if no API is configured, follow the exact filename pattern and section structure in `vault-map.md` — and say plainly that the result is a hand-built imitation of the template, not the template's output.
 - Goals vs reflections → these are **two different notes** (one holding task items, one holding narrative), named in `vault-map.md`. Check both; they complement each other.
 
 ## Cross-tool automations

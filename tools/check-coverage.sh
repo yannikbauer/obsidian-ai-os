@@ -69,6 +69,28 @@ if [ -f README.md ]; then
       [ -e "$f" ] || continue
       printf '%s' "$tree" | grep -Fq "$(basename "$f")" || say "tool missing from README tree: $f"
     done
+
+    # The same absence check, for the two sets that drifted on 2026-09-07 within a single
+    # session: a new integration pack and a new .local knob both reached the tree late, and
+    # `correction-words.local` had never reached it at all.
+    #
+    # ENUMERATE THE TEMPLATES, NOT THE USER'S FILES. integrations/ and *.local hold personal
+    # config; the README is generic and exported, so it must describe what SHIPS. Checking
+    # the user's own integrations/ against it would demand the shared README name their
+    # tools -- the exact generic/personal leak the architecture exists to prevent (L004).
+    # templates/ is the shipped set, so it is the right thing to hold the README to.
+    for t in templates/integrations/*.template.md; do
+      [ -e "$t" ] || continue
+      n=$(basename "$t" .template.md)
+      printf '%s' "$tree" | grep -Fq "$n.md" \
+        || say "integration pack missing from README tree: $n.md (template: $t)"
+    done
+    for t in templates/*.template.local; do
+      [ -e "$t" ] || continue
+      n=$(basename "$t" .template.local)
+      printf '%s' "$tree" | grep -Fq "$n.local" \
+        || say "config knob missing from README tree: $n.local (template: $t)"
+    done
   fi
 fi
 
@@ -81,6 +103,20 @@ for f in CLAUDE.md README.md; do
   bad=$(grep -inE '\b(one|two|three|four|five|six|seven|eight|nine|ten|[0-9]+)[[:space:]]+(of these[[:space:]]+)?(rules?[[:space:]]+are[[:space:]]+enforced|hooks?|deny gates?|gates?)\b' "$f" \
         | grep -viE 'two `?Stop`? hooks' | head -1)
   [ -n "$bad" ] && say "$f states a hook/gate count, which drifts — enumerate instead: $bad"
+done
+
+# 5. No live prose may cross-reference a rule BY ORDINAL. Same latent bug as a count
+#    (check 4): inserting a rule silently invalidates every reference past it, and
+#    nothing fails. On 2026-09-07 one inserted rule broke two references and produced a
+#    duplicate ordinal in the same list, undetected until a retro looked. Refer to rules
+#    by NAME.
+#    Scope is live prose only. history/ is an append-only record and docs/ is dated —
+#    a numeric reference there was true when written and must stay untouched, so
+#    flagging it would be exactly the rule that fires on legitimate work (L006).
+for f in CLAUDE.md skills/*/SKILL.md; do
+  [ -f "$f" ] || continue
+  bad=$(grep -inE '\brules?[[:space:]]+[0-9]+\b' "$f" | head -1)
+  [ -n "$bad" ] && say "$f cites a rule by ordinal, which breaks when a rule is inserted — name it instead: $bad"
 done
 
 [ "$problems" -eq 0 ] || exit 1

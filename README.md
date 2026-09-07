@@ -18,13 +18,17 @@ _AI/                        the git repo — git lives here, not at the vault ro
 ├── leak-allow.local        literals that are deliberately public      personal · never exported
 ├── publish.local           where to publish, and as whom              personal · never exported
 ├── readonly-zones.local    folders the AI must never write into       personal · never exported
+├── correction-words.local  what counts as you correcting the AI       personal · never exported
+├── clickup-replace-allow.local  doc pages the AI may rewrite whole    personal · never exported
 │
-├── maps/
-│   └── vault-map.md        how your vault is organised                personal
+├── maps/                   orientation — structure, not content       personal
+│   ├── vault-map.md          how your vault is organised
+│   └── workflow-map.md       which system is authoritative for what
 ├── integrations/           a file's existence IS the on-switch        personal
 │   ├── calendar.md           role: calendar
 │   ├── clickup.md            role: task-system
-│   └── gmail.md              role: mail
+│   ├── gmail.md              role: mail
+│   └── obsidian.md           role: notes — OPTIONAL; absent means no API, not no notes
 │
 ├── skills/                 capabilities, loaded on demand             generic
 │   ├── personal-assistant/   the orchestrator — cross-tool workflows
@@ -52,7 +56,8 @@ _AI/                        the git repo — git lives here, not at the vault ro
 │
 ├── docs/                   thinking, not machinery                    personal · never exported
 │   ├── roadmap.md            living index of intent
-│   └── work/                 one file per in-flight roadmap item
+│   ├── artifacts/            published write-ups, with their sources
+│   └── working-notes/        one file per in-flight roadmap item
 │
 ├── templates/              skeletons for scaffolding and sharing      generic
 │   └── integrations/         one per tool role
@@ -79,14 +84,16 @@ safe to re-run:
 | Created in `_AI/` | From | Why it is not committed |
 |---|---|---|
 | `me.md`, `maps/vault-map.md` | templates | yours to fill in |
+| `maps/workflow-map.md` | template | which system is authoritative for what — a decision to make once, not a build. Ships pre-filled with a sane default; edit the rows that do not match how you work |
 | `history/file-log.md`, `history/session-log.md` | templates | your record, not the framework's |
-| `history/lessons.md` | template | the learning ledger — what the OS has been taught |
+| `history/lessons.md` | template | the learning ledger — what the OS has been taught. **Yours starts empty.** Comments across this repo cite lessons as `L001`, `L006` and so on: those are entries from the author's ledger, kept as the *reason* a rule or a test exists. They are provenance, not a cross-reference you can follow — read the sentence around them, not the id. |
 | `docs/README.md` | template | creates the folder and says what it is for |
 | `tmp/README.md` | template | `tmp/` is gitignored, so the folder needs creating |
 | `leak-patterns.local`, `leak-allow.local` | templates | your identifiers |
 | `readonly-zones.local` | template | your folder names |
 | `publish.local` | template | your destination; ships commented out |
 | `correction-words.local` | template | what counts as you correcting the AI; all comments by default, so the built-in English list stays in force |
+| `clickup-replace-allow.local` | template | task-system page ids the AI may rewrite in full; empty by default, so every whole-page rewrite is denied |
 | `integrations/` | — | **empty on purpose**: a file's existence is the on-switch, so a placeholder here would read as a half-configured tool. The `setup` skill writes the real files. |
 
 `databases/` is not created: it is a placeholder for a search index that does not
@@ -161,6 +168,31 @@ private because its reasoning is entangled with one person's circumstances.
 - **`jq`** at `/usr/bin/jq` — the hooks parse their input with it. Shipped with recent macOS; `install.sh` checks and fails loudly if it is missing, because the hooks fail *open* and a missing `jq` would silently stop the safety gates enforcing.
 - An **Obsidian vault** that is not itself a git repo — `_AI/` becomes its own repo inside it, and the vault stays plain-local.
 - A **Claude account** you are signed in to (`claude auth status`), if you want account connectors for mail/calendar/tasks — see [Connectors](#connectors).
+
+### Obsidian plugins — none required, several assumed
+
+**The OS itself needs no plugin.** It reads and writes markdown files, which is why disk
+access stays the default route for note content: faster than any API, no token, and it works
+while Obsidian is closed.
+
+What the plugins buy is the *conventions* the bundled workflows assume. Each degrades in a
+specific, named way, so pick the ones whose loss you would actually notice.
+
+| Plugin | What it unlocks here | Without it |
+|---|---|---|
+| **Templater** | Periodic and yearly notes whose dates, navigation links and tags are *computed*, not typed. | The OS would have to re-implement each template in prose, which drifts from the template silently. Its `<%* … %>` blocks are also a read-only zone the OS never edits. |
+| **Periodic Notes** | One command creates the correctly named, correctly foldered, template-rendered daily / weekly / monthly note. | The OS hand-builds an imitation — and is instructed to *say* it is an imitation rather than pass it off as the template's output. |
+| **Tasks** | The task vocabulary the weekly loop reads and writes: statuses, priorities, start and completion dates, and the live query blocks that make a goals note self-updating. | Tasks stay plain checkboxes. The loop still runs, more crudely; goals notes stop answering questions on their own. |
+| **Local REST API** *(optional)* | The four things the filesystem structurally cannot do — run a template, execute an app command, `PATCH` one section without rewriting a file, and ask the app what it knows (search, tags, metadata). | Disk-only. Nothing is lost except those four. |
+| **Advanced URI** *(optional)* | Fire-and-forget command triggering with no token and no open port. | Nothing, if the REST API is installed — that does the same and returns results. |
+
+**Both API plugins need Obsidian to be running**, so nothing scheduled, pushed or headless may
+depend on them. And the REST API is an authenticated localhost listener with full vault
+read/write *and* command execution, whose key sits in plaintext in its own config — see the
+security notes in `templates/integrations/obsidian.template.md` before enabling it.
+
+Mentioned in passing but **not** required: Dataview, Calendar, and an unlinked-files finder.
+
 
 ## Quick start
 

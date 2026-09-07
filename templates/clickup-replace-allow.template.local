@@ -1,0 +1,23 @@
+# clickup-replace-allow.local — task-system doc pages the AI MAY rewrite in full.
+#
+# Read by harness/hooks/guard-clickup.sh. One page id per line; blank lines and
+# #-comments ignored.
+#
+# EMPTY BY DEFAULT, AND THAT IS THE SAFE STATE. With no ids listed, every whole-page
+# rewrite is denied — correct, because in a task system whose docs carry rich nodes
+# (task/doc/view chips) a full rewrite flattens them irreversibly, and the damage is
+# invisible to any diff, checksum or snapshot.
+#
+# Add an id ONLY for a page you have deliberately set aside as the AI's own staging
+# surface — one you merge into your real page by hand. Never your main page.
+#
+# This is the MECHANICAL half of the rule. The hook can check a page id and nothing
+# else; the conditions it cannot check stay with the AI and belong in
+# integrations/<task-system>.md:
+#   - the page must come back from the API under the expected name
+#   - the page must be read first, and the write refused if it contains a link whose
+#     text equals its href — a chip's signature. Fail closed.
+#
+# Personal: page ids describe your document tree, so this file is never exported.
+
+# <page-id>    # e.g. the AI's staging page in your main doc

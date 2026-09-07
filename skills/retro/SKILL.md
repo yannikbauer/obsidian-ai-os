@@ -27,7 +27,8 @@ that gap: **extraction is automatic, application is gated by the user.**
 3. **Never edit `me.md`.** Identity is asserted by the user, never inferred from how a
    session went.
 4. **Never write outside `_AI/`.** No vault notes, so `history/file-log.md` is never
-   involved — `_AI/` is version-controlled and git is its audit trail (framework rule 5).
+   involved — `_AI/` is version-controlled and git is its audit trail (the framework's
+   *Log file changes* rule).
 5. **Never quote vault content into a tracked file.** Transcripts contain diary, health
    and financial notes verbatim. State the lesson; cite a session id as the evidence.
 6. **≤3 lessons per pass.** Forcing the choice is what keeps them worth reading.
