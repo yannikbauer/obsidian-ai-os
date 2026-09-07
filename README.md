@@ -13,7 +13,8 @@ does, and **gitignored** is not tracked at all.
 _AI/                        the git repo — git lives here, not at the vault root
 ├── CLAUDE.md               the framework / "soul"                     generic
 ├── me.md                   who you are, how to work with you          personal
-├── LICENSE                 MIT — without it, nobody may reuse this    generic
+├── LICENSE                 Apache-2.0 — without it, nobody may reuse  generic
+├── NOTICE                  attribution that redistributions must keep  generic
 ├── CONTRIBUTING.md         the generic/personal rule, DCO, licence grant generic
 ├── leak-patterns.local     identifiers the export scans for           personal · never exported
 ├── leak-allow.local        literals that are deliberately public      personal · never exported
@@ -502,9 +503,21 @@ This OS pairs well with the **superpowers** plugin (brainstorming, writing-plans
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Use it, fork it, adapt it. The framework is the
-shareable part; your `me.md`, `maps/` and `integrations/` are yours and never
-leave your machine.
+**Apache-2.0** — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Use it, fork it, adapt it,
+commercially or not. The framework is the shareable part; your `me.md`, `maps/` and
+`integrations/` are yours and never leave your machine.
+
+Two obligations if you redistribute it, modified or not: keep the `LICENSE` and `NOTICE`
+files, and state in modified files that you changed them. That is all — no copyleft, so
+your own additions stay yours.
+
+Apache rather than MIT for the **patent grant**: contributors licence any patents covering
+their contribution, and the licence terminates for anyone who brings a patent suit over the
+work. MIT is silent on patents entirely. Relevant enough in AI tooling to be worth the
+longer file, at no cost to how freely you can use this.
+
+*(Versions published before 2026-09-07 were MIT. Those remain MIT for anyone who has them —
+a licence change never reaches backwards.)*
 
 If you fork this, put your own destination in `_AI/publish.local` rather than
 editing the script — see [Sharing your copy](#sharing-your-copy).

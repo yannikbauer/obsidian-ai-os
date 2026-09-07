@@ -36,6 +36,9 @@ cp    "$AI_DIR/.gitignore"     "$TARGET/.gitignore"
 # it. The licence names the copyright holder, which is why the leak check needs
 # leak-allow.local -- see below.
 cp    "$AI_DIR/LICENSE"        "$TARGET/LICENSE"
+# NOTICE is not optional decoration: section 4 of Apache-2.0 requires redistributions
+# to carry it, so an export without it hands people a licence they cannot comply with.
+[ -f "$AI_DIR/NOTICE" ] && cp "$AI_DIR/NOTICE" "$TARGET/NOTICE"
 
 # .github/ as a whole stays private -- the workflows name the private remote and its
 # publishing mechanics. FUNDING.yml is the one file in it that is meant for strangers:
