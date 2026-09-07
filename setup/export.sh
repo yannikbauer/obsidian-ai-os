@@ -25,16 +25,28 @@ fi
 mkdir -p "$TARGET"
 
 # --- copy the SHAREABLE set (everything generic) ----------------------------
-# Included: framework CLAUDE.md, skills/, templates/, setup/, README, ignore files.
+# Included: framework CLAUDE.md, skills/, templates/, setup/, README, CONTRIBUTING, ignore files.
 # Excluded: me.md, maps/, integrations/, history/, tmp/, databases/ (all personal).
 # This is an allowlist — a new personal folder is excluded by default, not by rule.
 cp    "$AI_DIR/CLAUDE.md"      "$TARGET/CLAUDE.md"
 cp    "$AI_DIR/.gitignore"     "$TARGET/.gitignore"
 [ -f "$AI_DIR/README.md" ] && cp "$AI_DIR/README.md" "$TARGET/README.md"
+[ -f "$AI_DIR/CONTRIBUTING.md" ] && cp "$AI_DIR/CONTRIBUTING.md" "$TARGET/CONTRIBUTING.md"
 # A public repo without a licence is all-rights-reserved: nobody may legally reuse
 # it. The licence names the copyright holder, which is why the leak check needs
 # leak-allow.local -- see below.
 cp    "$AI_DIR/LICENSE"        "$TARGET/LICENSE"
+
+# .github/ as a whole stays private -- the workflows name the private remote and its
+# publishing mechanics. FUNDING.yml is the one file in it that is meant for strangers:
+# it renders the Sponsor button, and without an exception it can never reach the public
+# repo, because publish.sh syncs with --delete and would remove anything added there by
+# hand. A NARROW exception, one named file, not the folder: widening it to `.github/*`
+# would ship the workflows the next time one is added, silently.
+if [ -f "$AI_DIR/.github/FUNDING.yml" ]; then
+  mkdir -p "$TARGET/.github"
+  cp "$AI_DIR/.github/FUNDING.yml" "$TARGET/.github/FUNDING.yml"
+fi
 cp -R "$AI_DIR/skills"        "$TARGET/skills"
 cp -R "$AI_DIR/harness"       "$TARGET/harness"
 # tools/ ships: skills call these scripts by path, so a shareable skill whose helper
@@ -50,7 +62,7 @@ cp -R "$AI_DIR/setup"         "$TARGET/setup"
 # forces a deliberate decision instead of inheriting the allowlist's silent default.
 # (Ledger L008: an allowlist's safe default for personal data is its silent default for
 # generic code — that is how tools/ nearly shipped a skill without its helper.)
-# NOT_EXPORTED: me.md maps integrations history tmp databases docs .github correction-words.local leak-allow.local leak-patterns.local publish.local readonly-zones.local clickup-replace-allow.local
+# NOT_EXPORTED: me.md maps integrations history tmp databases docs .github(except FUNDING.yml) correction-words.local leak-allow.local leak-patterns.local publish.local readonly-zones.local clickup-replace-allow.local
 
 # strip any stray junk
 find "$TARGET" -name '.DS_Store' -delete

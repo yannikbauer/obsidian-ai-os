@@ -14,6 +14,7 @@ _AI/                        the git repo — git lives here, not at the vault ro
 ├── CLAUDE.md               the framework / "soul"                     generic
 ├── me.md                   who you are, how to work with you          personal
 ├── LICENSE                 MIT — without it, nobody may reuse this    generic
+├── CONTRIBUTING.md         the generic/personal rule, DCO, licence grant generic
 ├── leak-patterns.local     identifiers the export scans for           personal · never exported
 ├── leak-allow.local        literals that are deliberately public      personal · never exported
 ├── publish.local           where to publish, and as whom              personal · never exported
