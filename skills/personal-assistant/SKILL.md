@@ -42,6 +42,10 @@ the user's to answer, and the write happens after they have answered.
 2. **Sync "Tasks done".** Write the archived items into the note's `# Tasks done`,
    **hierarchy preserved**, grouped by day. Diff first — if items are already there from an
    earlier run, append only the new ones. Never invent a parent for an orphaned child.
+   **This write, the Focus ticks in step 3 and the reflection sections in step 5 are all
+   section-scoped edits to a note the user may have open** — so take the route the `notes`
+   skill prescribes (its API where one is configured, the file-editing tools otherwise,
+   never the shell), append rather than rewrite, and let a missed section address fail.
 3. **Score the Focus.** Compare the beginning-of-week Focus against what actually happened.
    State the count plainly (e.g. "4 of 6"), and say which slipped and why if the calendar or
    the archive shows it. **Score it yourself and propose the ticks** — the user does not need

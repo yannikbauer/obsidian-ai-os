@@ -26,7 +26,7 @@ sets every rule below.
    exposure; active job applications and their counterparties; named third parties
    who have not consented to being in the room. A calendar item in one of these
    classes renders as "a health appointment, 14:00" and nothing more.
-3. **Load the private block-list if it exists.** If `_AI/leak-patterns.local` is
+3. **Load the private block-list if it exists.** If `_AI/config/leak-patterns.local` is
    present, read it and treat every pattern as a substring that must not appear in
    any output. It is private and never exported (the export is an allowlist and leaves every `.local` file behind); absence is normal, not an error.
 4. **Pre-flight gate — run it before anything reaches the screen.** Read what is
@@ -44,18 +44,26 @@ Read lazily, in this order, and only what the chosen length needs:
 
 - **Always available** (session-start imports): `_AI/CLAUDE.md`, `_AI/me.md`,
   `_AI/maps/vault-map.md`.
-- `_AI/docs/aios-interview-brief.md` — the architecture, workflows, hard problem,
-  what has already changed, and limitations. **Any section marked `KEEP OUT of
-  demos` is off limits**: do not read it, quote it, or summarise it. Some sections
-  of that file are written for a different audience entirely, and the marker is
-  the authority on which — do not infer it from a heading.
-- `_AI/docs/roadmap.md` — the tiers and the item numbers, for the roadmap beat.
-- `_AI/README.md` — install path and the two-registry model, if asked.
+- `_AI/README.md` — the architecture, the layered design, the limitations
+  (*What it can't do yet*), the install path and the two-registry model. **This is
+  the primary fact source**, and deliberately so: `tools/check-coverage.sh` holds it
+  to the tree it actually describes, making it the one write-up here that cannot
+  quietly stop being true.
+- `_AI/docs/roadmap.md` — the tiers and the item numbers for the roadmap beat, and
+  the `Done` entries when someone asks why a thing is built the way it is.
+- `_AI/history/session-log.md` — dated evidence for beat 5, and the only record of
+  what the system has actually changed.
 
-**Degrade gracefully.** `docs/` is not exported, so a cloned copy of the OS will
-not have the brief or the roadmap. If they are absent, run beats 1–4 and 7 from
-`README.md` + `CLAUDE.md` alone, and say plainly that the detailed write-ups are
-private to the original install rather than improvising their content.
+**Never read a doc written for a different audience.** Some files here are
+addressed to one reader — an application, a named company, a private review — and a
+file may say so with a `KEEP OUT of demos` marker. The marker is the authority, not
+the heading: do not infer it, and never quote, summarise or paraphrase from such a
+file. When in doubt, use the README.
+
+**Degrade gracefully.** `docs/` and `history/` are not exported, so a cloned copy of
+the OS has neither the roadmap nor the session log. If they are absent, run beats
+1–4 and 7 from `README.md` + `CLAUDE.md` alone, and say plainly that those records
+are private to the original install rather than improvising their content.
 
 ## Opening — one question, then start
 
@@ -83,7 +91,9 @@ turns a general-purpose coding agent into a personal assistant — with the vaul
 itself as the substrate instead of a database. Show the real artifacts: the
 six-line root `CLAUDE.md` stub, the `_AI/` tree, the fact that orchestration is
 prose in `skills/personal-assistant/SKILL.md` and that there is no runtime, no
-state machine, no code. Quote the line count from the brief rather than guessing it.
+state machine, no code. **Count the lines rather than quoting a number** — `wc -l`
+over the skill in front of you, live, is both more honest and a better beat than a
+figure read out of a document.
 
 **3. Why it is built this way — three seams.** This is the beat with the actual
 engineering content.
@@ -120,9 +130,9 @@ by where the week actually is (compute the ISO week and weekday; do not assume):
 - **Friday: the mechanical wrap-up** — completed Focus items, carry-overs, and the
   cancelled-versus-slipped distinction.
 
-**5. What it has already changed.** Read the brief's *What has already changed in
-practice* subsection, and give two or three of the dated items — not all
-of them. The point is that the system changed the workflow rather than merely
+**5. What it has already changed.** Read `_AI/history/session-log.md` and give two
+or three *dated* items — not all of them. Take them from the log itself rather than
+from any summary of it: a summary is a copy that drifts, and the log is the record. The point is that the system changed the workflow rather than merely
 describing it: the weekly loop is codified rather than remembered, drift checking
 became part of planning instead of an occasional cleanup, the planning window
 widened by a week after a near-miss, and a machine-writable surface exists where
@@ -169,8 +179,8 @@ prose and version control, not a product.
 
 ## Does NOT
 
-Write anything, anywhere, under any framing. Read any section the brief marks
-keep-out. Open the
+Write anything, anywhere, under any framing. Read any doc, or section of one,
+marked keep-out or addressed to a different audience. Open the
 diary, therapy, health, financial or job-application notes. Name third parties.
 Improvise facts when `docs/` is absent. Ask the audience questions — the user runs
 the room, this skill supplies the material.

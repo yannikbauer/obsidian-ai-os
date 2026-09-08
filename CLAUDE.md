@@ -59,7 +59,7 @@ Skills contain **generic logic** ("how to operate a task-system's tasks and docs
 - **Snapshot before destructive edits.** Before replacing the content of a task-system doc (some APIs overwrite the whole page), read the current content and save a copy to `tmp/` first. Snapshots are **local working files, gitignored** — the copy on disk is the recovery, not git. Note the limit: a snapshot is a **diff aid, not a guaranteed restore**. Where a page carries rich nodes that flatten to plain markdown on read, restoring the snapshot replays the same flattening (see roadmap #1). Prune snapshots once the edit is confirmed good.
 - **Draft, never send.** Emails are always drafts until the user explicitly confirms sending. Never auto-send.
 - **Confirm before writes; read freely.** Reading the calendar, task system, mail, or the vault needs no permission. Modifying vault notes, creating tasks, or creating/deleting calendar events needs confirmation.
-- **Respect read-only zones.** Never modify Templater `<%* ... %>` blocks, live \`\`\`tasks query blocks, or files in the read-only folders listed in `readonly-zones.local` (documented in `maps/vault-map.md`; the `.local` file is what the hook actually enforces).
+- **Respect read-only zones.** Never modify Templater `<%* ... %>` blocks, live \`\`\`tasks query blocks, or files in the read-only folders listed in `config/readonly-zones.local` (documented in `maps/vault-map.md`; the `.local` file is what the hook actually enforces).
 - **Publishing is never implied.** A commit, a push, or "ship it" is not approval to make
   content public. Publication is irreversible in a way commits are not: a push to a public
   repo enters the platform's public events stream, third parties mirror it, and a later
@@ -72,12 +72,19 @@ Skills contain **generic logic** ("how to operate a task-system's tasks and docs
 
 **These rules are enforced by hooks**, not by judgment — they fail closed:
 the task-system whole-page `replace`, sending mail, writing into read-only zones,
-rewriting live query blocks, and blanket `git add -A` staging in a tree more than one
-session writes to. A hook firing means a rule was about to be broken: read
-the reason and take the alternative it names, rather than working around it. The
+rewriting live query blocks, permanent deletion, and blanket `git add -A` staging in a
+tree more than one session writes to. A hook firing means a rule was about to be broken:
+read the reason and take the alternative it names, rather than working around it. The
 hooks are a floor, not a substitute for the human review gate — and they fail *open*,
 so a hook that cannot run silently stops protecting anything. `install.sh` checks for
 its `jq` dependency for that reason. See `harness/README.md`.
+
+**A gate can only see the route it matches — so route note writes where it can see them.**
+Vault writes go through the notes API (`mcp__*__vault_*`), and fall back to `Write`/`Edit`
+when Obsidian is closed. **Never through Bash**: a shell command's target is a string no
+gate can read, and on 2026-09-07 a whole session of vault edits took that path and fired
+nothing. A coarse Bash hook now *asks* when a command names a read-only zone and looks
+mutating, but asking is a backstop, not the boundary — the routing rule is the boundary.
 
 Two `Stop` hooks sit alongside them, with deliberately opposite postures. One
 **refuses** to end a session while a vault-note change is missing from

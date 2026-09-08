@@ -36,7 +36,7 @@ expect 0 hooks/guard-vault-write.sh ''
 # defaults (no config file) and a config file that replaces them. Run each against
 # a temporary _AI root so the result does not depend on this machine's own config.
 ZTMP=$(mktemp -d)
-mkdir -p "$ZTMP/_AI/harness/hooks"
+mkdir -p "$ZTMP/_AI/harness/hooks" "$ZTMP/_AI/config"
 cp "$HOOKS/hooks/guard-vault-write.sh" "$HOOKS/hooks/lib.sh" "$ZTMP/_AI/harness/hooks/"
 ZHOOK="$ZTMP/_AI/harness/hooks/guard-vault-write.sh"
 
@@ -56,10 +56,197 @@ zexpect 2 /v/Archive/old.md      "default blocks Archive/"
 zexpect 0 /v/Secret/x.md         "default allows an unlisted folder"
 
 # With a config file: it REPLACES the defaults, rather than adding to them.
-printf '%s\n' '# comment' '' '*/Secret/*' > "$ZTMP/_AI/readonly-zones.local"
+printf '%s\n' '# comment' '' '*/Secret/*' > "$ZTMP/_AI/config/readonly-zones.local"
 zexpect 2 /v/Secret/x.md         "config blocks a configured folder"
 zexpect 0 /v/Archive/old.md      "config replaces the defaults, not extends them"
 rm -rf "$ZTMP"
+
+# --- guard-vault-write, MCP route (roadmap #31) ---------------------------
+# The MCP vault_* tools carry .tool_input.path (vault-relative), not .file_path.
+# Everything below would have passed silently before the matcher was widened,
+# which is the entire point of the item: the gate was watching a tool name.
+MTMP=$(mktemp -d)
+mkdir -p "$MTMP/_AI/harness/hooks" "$MTMP/_AI/config" "$MTMP/Archive" "$MTMP/Notes"
+cp "$HOOKS/hooks/guard-vault-write.sh" "$HOOKS/hooks/lib.sh" "$MTMP/_AI/harness/hooks/"
+printf '%s\n' '*/Archive/*' > "$MTMP/_AI/config/readonly-zones.local"
+MHOOK="$MTMP/_AI/harness/hooks/guard-vault-write.sh"
+printf '# Goals\n\n```tasks\nnot done\n```\n' > "$MTMP/Notes/goals.md"
+printf '# Plain\n\njust prose\n' > "$MTMP/Notes/plain.md"
+
+mexpect() { # mexpect <want-exit> <json> <label>
+  printf '%s' "$2" | env CLAUDE_PROJECT_DIR="$MTMP" "$MHOOK" >/dev/null 2>&1
+  mgot=$?
+  if [ "$mgot" -eq "$1" ]; then
+    echo "  ok   mcp vault route: $3"
+  else
+    echo "  FAIL mcp vault route: $3 — wanted exit $1, got $mgot" >&2; FAIL=1
+  fi
+}
+
+mexpect 2 '{"tool_name":"mcp__obs__vault_write","tool_input":{"path":"Archive/old.md","content":"x"}}' \
+  "a relative path is resolved against the vault before matching a zone"
+mexpect 0 '{"tool_name":"mcp__obs__vault_write","tool_input":{"path":"Notes/plain.md","content":"x"}}' \
+  "an ordinary note is allowed"
+mexpect 2 '{"tool_name":"mcp__obs__vault_write","tool_input":{"path":"Notes/goals.md","content":"x"}}' \
+  "vault_write is a whole-file overwrite, so a live query blocks it"
+mexpect 0 '{"tool_name":"mcp__obs__vault_append","tool_input":{"path":"Notes/goals.md","content":"- x"}}' \
+  "append does not overwrite, so the same note is fine"
+mexpect 2 '{"tool_name":"mcp__obs__vault_patch","tool_input":{"path":"Notes/plain.md","targetType":"heading","target":["A"],"operation":"append","content":"x","createTargetIfMissing":true}}' \
+  "createTargetIfMissing is denied (a mis-cased heading silently forks the note)"
+mexpect 0 '{"tool_name":"mcp__obs__vault_patch","tool_input":{"path":"Notes/plain.md","targetType":"heading","target":["A"],"operation":"append","content":"x"}}' \
+  "the same patch without the flag is allowed"
+mexpect 2 '{"tool_name":"mcp__obs__vault_patch","tool_input":{"path":"Notes/goals.md","targetType":"heading","target":["Goals"],"operation":"replace","content":"x"}}' \
+  "an unscoped heading replace on a live-query note is denied"
+mexpect 0 '{"tool_name":"mcp__obs__vault_patch","tool_input":{"path":"Notes/goals.md","targetType":"heading","target":["Goals"],"within":0,"operation":"replace","content":"x"}}' \
+  "the same replace narrowed by 'within' is allowed"
+mexpect 0 '{"tool_name":"mcp__obs__vault_patch","tool_input":{"path":"Notes/goals.md","targetType":"frontmatter","target":"tags","operation":"replace","value":["a"]}}' \
+  "frontmatter edits are never subtree-destructive"
+mexpect 2 '{"tool_name":"mcp__obs__vault_delete","tool_input":{"path":"Notes/plain.md","permanent":true}}' \
+  "permanent deletion is refused"
+mexpect 0 '{"tool_name":"mcp__obs__vault_delete","tool_input":{"path":"Notes/plain.md"}}' \
+  "deleting to trash is allowed"
+mexpect 2 '{"tool_name":"mcp__obs__vault_move","tool_input":{"path":"Notes/plain.md","destination":"Archive/plain.md"}}' \
+  "the DESTINATION of a move is zone-checked, not just the source"
+mexpect 0 '{"tool_name":"mcp__obs__vault_patch","tool_input":{"path":"Notes/plain.md","targetType":"heading","target":["A"],"operation":"replace","scope":"parent","destination":{"parent":null,"place":"last"}}}' \
+  "vault_patch's object destination is not mistaken for a path"
+mexpect 2 '{"tool_name":"mcp__obs__vault_write","tool_input":{"path":"Notes/new.md","content":"<%* tR += 1 %>"}}' \
+  "a Templater block outside Templates/ is denied on this route too"
+mexpect 0 'not json at all' "fails open on bad input"
+rm -rf "$MTMP"
+
+# --- guard-bash-vault (roadmap #31, con 2) --------------------------------
+# ASKS (exit 0 + an "ask" decision), never denies — so the exit code alone proves
+# nothing here and the assertion has to read the decision. A negative test that
+# checks only for absence passes when the hook does not exist at all (L: negative
+# tests must assert shape).
+BTMP=$(mktemp -d)
+mkdir -p "$BTMP/_AI/harness/hooks" "$BTMP/_AI/config"
+cp "$HOOKS/hooks/guard-bash-vault.sh" "$HOOKS/hooks/lib.sh" "$BTMP/_AI/harness/hooks/"
+printf '%s\n' '*/Archive/*' '*/copilot/*' > "$BTMP/_AI/config/readonly-zones.local"
+BHOOK="$BTMP/_AI/harness/hooks/guard-bash-vault.sh"
+
+bexpect() { # bexpect <ask|quiet> <command> <label>
+  out=$(printf '%s' "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":$(printf '%s' "$2" | /usr/bin/jq -Rs .)}}" \
+    | env CLAUDE_PROJECT_DIR="$BTMP" "$BHOOK" 2>/dev/null)
+  if [ "$1" = ask ]; then
+    case "$out" in
+      *'"permissionDecision":"ask"'*) echo "  ok   bash vault gate: $3" ;;
+      *) echo "  FAIL bash vault gate: $3 — wanted an ask decision, got: ${out:-<nothing>}" >&2; FAIL=1 ;;
+    esac
+  else
+    case "$out" in
+      '') echo "  ok   bash vault gate: $3" ;;
+      *) echo "  FAIL bash vault gate: $3 — wanted silence, got: $out" >&2; FAIL=1 ;;
+    esac
+  fi
+}
+
+bexpect ask   'rm "$V/Archive/old.md"'                 "rm naming a zone asks"
+bexpect ask   'echo x > "$V/Archive/old.md"'           "a redirect into a zone asks"
+bexpect ask   "sed -i '' s/a/b/ Archive/x.md"          "sed -i naming a zone asks"
+bexpect ask   'cp a.md copilot/b.md'                   "a second configured zone asks"
+bexpect quiet 'cat "$V/Archive/old.md"'                "reading a zone stays silent"
+bexpect quiet 'grep -r foo Archive/ 2>&1 | head'       "2>&1 is not a write (session-digest bug)"
+bexpect quiet 'rm "$V/Notes/scratch.md"'               "mutating a NON-zone path stays silent"
+bexpect quiet 'ls Archive/'                            "a plain listing stays silent"
+printf '%s' 'not json at all' | env CLAUDE_PROJECT_DIR="$BTMP" "$BHOOK" >/dev/null 2>&1
+if [ $? -eq 0 ]; then echo "  ok   bash vault gate: fails open on bad input"
+else echo "  FAIL bash vault gate: bad input did not fail open" >&2; FAIL=1; fi
+rm -rf "$BTMP"
+
+# --- setup/leak-check.sh path resolution (roadmap #36) ---------------------
+# The harness covers hooks and tools/; setup/ was covered by nothing, and this
+# script is the gate between the vault and a public repository. Its failure mode
+# is not a false pass on a pattern -- it is failing to FIND its patterns, which
+# looks identical to a clean run. Prerequisite for moving the .local knobs.
+LTMP=$(mktemp -d)
+mkdir -p "$LTMP/_AI/setup" "$LTMP/_AI/config"
+cp "$HOOKS/../setup/leak-check.sh" "$LTMP/_AI/setup/"
+printf '# framework\n' > "$LTMP/_AI/CLAUDE.md"
+printf '%s\n' 'Hieronymus' > "$LTMP/_AI/config/leak-patterns.local"
+printf 'a note about Hieronymus\n' > "$LTMP/dirty.md"
+printf 'a note about nobody\n'     > "$LTMP/clean.md"
+LCHK="$LTMP/_AI/setup/leak-check.sh"
+
+lexpect() { # lexpect <want-exit> <target> <label>
+  bash "$LCHK" "$2" >/dev/null 2>&1
+  lgot=$?
+  if [ "$lgot" -eq "$1" ]; then
+    echo "  ok   leak-check: $3"
+  else
+    echo "  FAIL leak-check: $3 — wanted exit $1, got $lgot" >&2; FAIL=1
+  fi
+}
+
+lexpect 2 "$LTMP/dirty.md" "a configured pattern is caught"
+lexpect 0 "$LTMP/clean.md" "a clean file passes"
+
+# The generic patterns must still work for a fork that has no pattern file --
+# absent-but-locatable is legitimate degradation, not a bug.
+mv "$LTMP/_AI/config/leak-patterns.local" "$LTMP/_AI/config/leak-patterns.parked"
+# Assembled at runtime, never written literally: this file SHIPS, and a literal
+# address here matches the very generic pattern the case is testing -- which aborts
+# the export. Caught by export.sh doing its job, 2026-09-08.
+printf 'mail me at %s%s\n' 'real.person' '@example.org' > "$LTMP/generic.md"
+lexpect 0 "$LTMP/clean.md"   "no pattern file: still runs (a fork has none)"
+lexpect 2 "$LTMP/generic.md" "no pattern file: the built-in email pattern still fires"
+mv "$LTMP/_AI/config/leak-patterns.parked" "$LTMP/_AI/config/leak-patterns.local"
+
+# The case the whole fixture exists for: the script cannot find its own root.
+# Before this check it printed a note to STDOUT and exited 0 having scanned for
+# generic patterns only -- a disabled gate that reports success.
+mkdir -p "$LTMP/stray/setup"
+cp "$LCHK" "$LTMP/stray/setup/leak-check.sh"
+bash "$LTMP/stray/setup/leak-check.sh" "$LTMP/dirty.md" >/dev/null 2>&1
+lgot=$?
+if [ "$lgot" -eq 3 ]; then
+  echo "  ok   leak-check: an unresolvable _AI root fails loudly (exit 3)"
+else
+  echo "  FAIL leak-check: an unresolvable _AI root did not fail — got exit $lgot" >&2; FAIL=1
+fi
+# ...and it must say so on stderr, not stdout: a warning on stdout reads as output.
+lerr=$(bash "$LTMP/stray/setup/leak-check.sh" "$LTMP/dirty.md" 2>&1 >/dev/null)
+case "$lerr" in
+  *"cannot locate the _AI root"*) echo "  ok   leak-check: the refusal names the cause on stderr" ;;
+  *) echo "  FAIL leak-check: refusal message missing from stderr — got: ${lerr:-<nothing>}" >&2; FAIL=1 ;;
+esac
+lexpect 64 "$LTMP/does-not-exist.md" "a missing target is a usage error, not a clean pass"
+rm -rf "$LTMP"
+
+# --- trace-write: only VAULT notes are traced ------------------------------
+# The Stop hook demands a file-log entry for everything this trace records, so a
+# path recorded here that is not a vault note becomes a demand to corrupt the
+# audit trail. Excluding _AI/ and treating the rest of the filesystem as "vault"
+# did exactly that, twice (a scratchpad file 2026-09-05, two ~/.claude/ memory
+# files 2026-09-07) before anyone fixed it rather than working around it.
+WTMP=$(mktemp -d)
+mkdir -p "$WTMP/_AI/harness/hooks" "$WTMP/_AI/tmp"
+cp "$HOOKS/hooks/trace-write.sh" "$HOOKS/hooks/lib.sh" "$WTMP/_AI/harness/hooks/"
+WHOOK="$WTMP/_AI/harness/hooks/trace-write.sh"
+
+wtrace() { # wtrace <path> — returns the trace file's line count for that path
+  printf '%s' "{\"session_id\":\"S\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":$(printf '%s' "$1" | /usr/bin/jq -Rs .)}}" \
+    | env CLAUDE_PROJECT_DIR="$WTMP" "$WHOOK" >/dev/null 2>&1
+  # grep -Fc exits 1 on zero matches, so `|| echo 0` would print a SECOND zero.
+  c=$(grep -Fc -- "$1" "$WTMP/_AI/tmp/writes-S.log" 2>/dev/null) || c=0
+  printf '%s' "${c:-0}"
+}
+
+wexpect() { # wexpect <traced 1|0> <path> <label>
+  got=$(wtrace "$2")
+  if [ "$got" = "$1" ]; then
+    echo "  ok   trace-write: $3"
+  else
+    echo "  FAIL trace-write: $3 — wanted traced=$1, got $got" >&2; FAIL=1
+  fi
+}
+
+wexpect 1 "$WTMP/Notes/real-note.md"             "a vault note is traced"
+wexpect 0 "$WTMP/_AI/docs/roadmap.md"            "_AI/ is not (git is its audit trail)"
+wexpect 0 "/tmp/scratchpad/token-days.html"      "a scratchpad file outside the vault is not traced"
+wexpect 0 "$HOME/.claude/projects/x/memory/m.md" "a ~/.claude memory file is not traced"
+wexpect 0 "/etc/hosts"                           "an unrelated absolute path is not traced"
+rm -rf "$WTMP"
 
 # --- guard-clickup ---
 # Runs against a TEMP tree with its own allowlist, never the real one. Two reasons: the
@@ -67,9 +254,9 @@ rm -rf "$ZTMP"
 # a file that SHIPS would put the owner's document tree in the public export. The leak
 # check catches that pattern, but a fixture that only passes because another gate stops it
 # is a fixture written wrong.
-KTMP=$(mktemp -d); mkdir -p "$KTMP/_AI/harness/hooks"
+KTMP=$(mktemp -d); mkdir -p "$KTMP/_AI/harness/hooks" "$KTMP/_AI/config"
 cp "$HOOKS/hooks/guard-clickup.sh" "$HOOKS/hooks/lib.sh" "$KTMP/_AI/harness/hooks/"
-printf '# fixture allowlist\nPAGE-ALLOWED\n' > "$KTMP/_AI/clickup-replace-allow.local"
+printf '# fixture allowlist\nPAGE-ALLOWED\n' > "$KTMP/_AI/config/clickup-replace-allow.local"
 kexpect() { # kexpect <want-exit> <json> <label>
   printf '%s' "$2" | CLAUDE_PROJECT_DIR="$KTMP" "$KTMP/_AI/harness/hooks/guard-clickup.sh" >/dev/null 2>&1
   kgot=$?
@@ -91,7 +278,7 @@ kexpect 0 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"pa
 kexpect 0 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-OTHER","name":"renamed"}}' \
   "a rename with no content is not a rewrite"
 # With no allowlist at all — a fresh install — every replace is denied. That is the safe default.
-rm -f "$KTMP/_AI/clickup-replace-allow.local"
+rm -f "$KTMP/_AI/config/clickup-replace-allow.local"
 kexpect 2 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-ALLOWED","content_edit_mode":"replace","content":"x"}}' \
   "denies everything when no allowlist exists"
 expect 0 hooks/guard-clickup.sh 'not json'
@@ -326,7 +513,7 @@ bexpect 0 'not json at all'                     "no command field is not a denia
 # The default is English; the user it watches need not be. A word list hardcoded in a
 # file that ships to other people is a bug, so the .local file must actually replace it.
 CTMP=$(mktemp -d)
-mkdir -p "$CTMP/_AI/tools"
+mkdir -p "$CTMP/_AI/tools" "$CTMP/_AI/config"
 cp "$HOOKS/../tools/session-digest.sh" "$CTMP/_AI/tools/"
 printf '%s\n' \
   '{"type":"user","promptSource":"typed","message":{"role":"user","content":"nein, so nicht"}}' \
@@ -335,14 +522,14 @@ cn=$(AIOS_DIR="$CTMP/_AI" "$CTMP/_AI/tools/session-digest.sh" --json --transcrip
 [ "$cn" = "0" ] && echo "  ok   session-digest default vocabulary misses other languages (expected)" \
                || { echo "  FAIL default vocabulary — wanted 0, got ${cn:-<none>}" >&2; FAIL=1; }
 
-printf '%s\n' '# comment' '' '^(nein|nicht so)\b' > "$CTMP/_AI/correction-words.local"
+printf '%s\n' '# comment' '' '^(nein|nicht so)\b' > "$CTMP/_AI/config/correction-words.local"
 cn=$(AIOS_DIR="$CTMP/_AI" "$CTMP/_AI/tools/session-digest.sh" --json --transcript "$CTMP/de.jsonl" 2>/dev/null | /usr/bin/jq -r .corrections)
 [ "$cn" = "1" ] && echo "  ok   correction-words.local replaces the default vocabulary" \
                || { echo "  FAIL correction-words.local ignored — wanted 1, got ${cn:-<none>}" >&2; FAIL=1; }
 
 # An all-comments file must not blank the vocabulary — that is how the scaffolded
 # default would silently disable every correction signal.
-printf '%s\n' '# only comments here' > "$CTMP/_AI/correction-words.local"
+printf '%s\n' '# only comments here' > "$CTMP/_AI/config/correction-words.local"
 printf '%s\n' '{"type":"user","promptSource":"typed","message":{"role":"user","content":"no, that is wrong"}}' > "$CTMP/en.jsonl"
 cn=$(AIOS_DIR="$CTMP/_AI" "$CTMP/_AI/tools/session-digest.sh" --json --transcript "$CTMP/en.jsonl" 2>/dev/null | /usr/bin/jq -r .corrections)
 [ "$cn" = "1" ] && echo "  ok   an all-comments config keeps the built-in vocabulary" \
@@ -448,5 +635,130 @@ case "$(cd "$CC5" && sh tools/check-coverage.sh 2>&1)" in
   *) echo "  ok   check-coverage accepts a rule referred to by name" ;;
 esac
 rm -rf "$CC5"
+
+
+# --- version.sh: the arithmetic a release depends on ---------------------------
+# Split out of publish.sh precisely so it can be run here: the only other way to
+# exercise it is to publish, and that path ends in an irreversible push.
+V="$HOOKS/../setup/version.sh"
+
+vexpect () { # vexpect <want-stdout> <label> <args...>
+  want=$1; label=$2; shift 2
+  got=$(bash "$V" "$@" 2>/dev/null)
+  if [ "$got" = "$want" ]; then
+    echo "  ok   version.sh: $label"
+  else
+    echo "  FAIL version.sh: $label — wanted '$want', got '$got'" >&2; FAIL=1
+  fi
+}
+
+vexpect 0.1.1 "patch increments the last field"  bump 0.1.0 patch
+vexpect 0.2.0 "minor resets patch"               bump 0.1.9 minor
+vexpect 1.0.0 "major resets both"                bump 0.9.4 major
+vexpect 0.10.0 "fields are numbers, not digits"  bump 0.9.0 minor
+
+# A malformed VERSION must not become a malformed git tag, so every one of these
+# has to be REJECTED rather than coerced into something plausible.
+for bad in 1.2 1.2.3.4 "" v1.2.3 1.2.x 1..3 "1.2.3 "; do
+  if bash "$V" validate "$bad" 2>/dev/null; then
+    echo "  FAIL version.sh accepted a malformed version: '$bad'" >&2; FAIL=1
+  else
+    echo "  ok   version.sh rejects '$bad'"
+  fi
+done
+vexpect "" "an unknown level exits non-zero" bump 1.0.0 sideways
+
+# `current` reads the file, and reports 0.0.0 rather than empty when it is absent —
+# an empty string would flow into `git tag v` and fail somewhere far from the cause.
+VT=$(mktemp -d); mkdir -p "$VT/setup"
+cp "$V" "$VT/setup/"
+vt_current () { ( cd "$VT" && bash setup/version.sh current 2>/dev/null ); }
+[ "$(vt_current)" = "0.0.0" ] && echo "  ok   version.sh: absent VERSION reads as 0.0.0" \
+  || { echo "  FAIL version.sh: absent VERSION should read 0.0.0, got '$(vt_current)'" >&2; FAIL=1; }
+printf '0.4.2\n' > "$VT/VERSION"
+[ "$(vt_current)" = "0.4.2" ] && echo "  ok   version.sh: current reads VERSION" \
+  || { echo "  FAIL version.sh: current misread VERSION" >&2; FAIL=1; }
+printf 'not-a-version\n' > "$VT/VERSION"
+if ( cd "$VT" && bash setup/version.sh current >/dev/null 2>&1 ); then
+  echo "  FAIL version.sh: a corrupt VERSION passed through as usable" >&2; FAIL=1
+else
+  echo "  ok   version.sh: a corrupt VERSION fails loudly"
+fi
+rm -rf "$VT"
+
+
+# --- version.sh changelog: the prepend that only runs on a SECOND release ------
+# This block would otherwise sit unexecuted until the day it mattered. It lives in
+# version.sh rather than inside publish.sh exactly so the suite can call the REAL
+# code -- a test that re-implements the lines it is checking proves the copy works.
+CLT=$(mktemp -d); CLF="$CLT/CHANGELOG.md"
+printf -- '- Initial tagged release.\n' | bash "$V" changelog "$CLF" 0.1.0 2026-09-07
+printf -- '- Ship versioning\n- Fix the path list\n' | bash "$V" changelog "$CLF" 0.2.0 2026-09-14
+printf -- '- Rename a .local knob\n' | bash "$V" changelog "$CLF" 1.0.0 2026-10-01
+
+clcheck () { # clcheck <test> <label>
+  if eval "$1"; then echo "  ok   changelog: $2"
+  else echo "  FAIL changelog: $2" >&2; FAIL=1; fi
+}
+clcheck '[ "$(grep -c "^# Changelog$" "$CLF")" -eq 1 ]' "the title is never duplicated"
+clcheck '[ "$(head -1 "$CLF")" = "# Changelog" ]'       "the title stays first"
+clcheck '[ "$(sed -n 3p "$CLF")" = "## v1.0.0 — 2026-10-01" ]' "newest release on top"
+clcheck '[ "$(grep -c "^## v" "$CLF")" -eq 3 ]'         "no release is dropped"
+clcheck 'grep -q "^- Initial tagged release.$" "$CLF"'  "the oldest entry survives two prepends"
+clcheck 'grep -q "^- Fix the path list$" "$CLF"'        "a multi-line entry keeps every line"
+
+# An empty entry must be refused rather than written: a version heading with nothing
+# under it is worse than no changelog, because it reads as "this release changed
+# nothing" when what happened is that the range came back empty.
+if printf '' | bash "$V" changelog "$CLF" 2.0.0 2026-11-01 2>/dev/null; then
+  echo "  FAIL changelog: an empty entry was written" >&2; FAIL=1
+else
+  echo "  ok   changelog: an empty entry is refused"
+fi
+# ...and the refusal must not have damaged the file it declined to write.
+clcheck '[ "$(grep -c "^## v" "$CLF")" -eq 3 ]' "a refused write leaves the file intact"
+rm -rf "$CLT"
+
+
+# --- publish.sh: a release is never something that just happens ----------------
+# These assert on the SCRIPT TEXT rather than by running it, because every path
+# through publish.sh ends at a public remote. Coarse, and still worth having: each
+# one encodes a decision that is invisible once the line is deleted.
+PS="$HOOKS/../setup/publish.sh"
+
+pgrep_ok () { # pgrep_ok <pattern> <label>
+  # `--` first: these patterns start with dashes, which grep would read as options.
+  if grep -Fq -- "$1" "$PS"; then
+    echo "  ok   publish.sh: $2"
+  else
+    echo "  FAIL publish.sh: $2 — '$1' is gone" >&2; FAIL=1
+  fi
+}
+
+# --delete would otherwise wipe the changelog on every sync, and it could never
+# accumulate more than the entry written that same run.
+pgrep_ok "--exclude 'CHANGELOG.md'" "the sync does not delete the public changelog"
+# A moved tag rewrites what an existing clone resolves to.
+pgrep_ok 'refs/tags/v$RELEASE" >/dev/null 2>&1' "an existing tag is checked before release"
+# The tagger is metadata; unpinned it inherits ~/.gitconfig, publicly and permanently.
+pgrep_ok 'tag -a "v$RELEASE"' "the tag is annotated, so its identity can be pinned"
+# One push for both refs: no window where the commit is public and the tag is not.
+pgrep_ok 'git push -q origin HEAD "refs/tags/v$RELEASE"' "commit and tag are pushed together"
+
+# The commit body and the changelog must read the SAME path list. They did not:
+# tools/ ships, and was missing from the hand-written copy in the commit-body range.
+n=$(grep -c 'EXPORTED_PATHS' "$PS")
+[ "$n" -ge 3 ] && echo "  ok   publish.sh: one exported-path list, used by both ranges" \
+  || { echo "  FAIL publish.sh: exported paths are enumerated in more than one place" >&2; FAIL=1; }
+for pth in tools setup skills harness templates VERSION; do
+  grep -E '^EXPORTED_PATHS=' "$PS" | grep -Fq " $pth" \
+    || { echo "  FAIL publish.sh: EXPORTED_PATHS omits '$pth', which ships" >&2; FAIL=1; }
+done
+echo "  ok   publish.sh: EXPORTED_PATHS covers every shipped path"
+
+# VERSION must actually reach the export, or the file names a version no fork can read.
+grep -Fq '$AI_DIR/VERSION' "$HOOKS/../setup/export.sh" \
+  && echo "  ok   export.sh ships VERSION" \
+  || { echo "  FAIL export.sh does not copy VERSION" >&2; FAIL=1; }
 
 exit $FAIL

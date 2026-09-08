@@ -1,9 +1,8 @@
 {
-  "model": "opus",
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|mcp__.*__vault_(write|append|patch|delete|move|copy)$",
         "hooks": [
           {
             "type": "command",
@@ -26,6 +25,10 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PROJECT_DIR}/_AI/harness/hooks/guard-blanket-add.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/_AI/harness/hooks/guard-bash-vault.sh\""
           }
         ]
       },
@@ -41,7 +44,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|mcp__.*__vault_(write|append|patch|delete|move|copy)$",
         "hooks": [
           {
             "type": "command",
@@ -64,5 +67,11 @@
         ]
       }
     ]
+  },
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [],
+    "deny": [],
+    "ask": []
   }
 }

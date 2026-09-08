@@ -131,19 +131,20 @@ scaffold "templates/tmp-readme.template.md"              "tmp/README.md"
 # docs/ is never exported, so a fresh clone has no folder and no hint that it is a
 # place to write. The README is the hint.
 scaffold "templates/docs-readme.template.md"             "docs/README.md"
+scaffold "templates/working-notes-readme.template.md"     "docs/working-notes/README.md"
 
 # The .local files. None of these ship, so without scaffolding a fresh install has
 # no sign they exist — and the leak-patterns one is a safety gap, not a convenience:
 # absent, export.sh silently falls back to two generic checks and publishes anyway.
-scaffold "templates/leak-patterns.template.local"        "leak-patterns.local"
-scaffold "templates/readonly-zones.template.local"       "readonly-zones.local"
-scaffold "templates/leak-allow.template.local"           "leak-allow.local"
-scaffold "templates/publish.template.local"              "publish.local"
+scaffold "templates/leak-patterns.template.local"        "config/leak-patterns.local"
+scaffold "templates/readonly-zones.template.local"       "config/readonly-zones.local"
+scaffold "templates/leak-allow.template.local"           "config/leak-allow.local"
+scaffold "templates/publish.template.local"              "config/publish.local"
 # all-comments by default, so the built-in English vocabulary stays in force until
 # someone actually edits it — but the file exists, which is the only way anyone learns
 # the knob is there
-scaffold "templates/correction-words.template.local"      "correction-words.local"
-scaffold "templates/clickup-replace-allow.template.local" "clickup-replace-allow.local"
+scaffold "templates/correction-words.template.local"      "config/correction-words.local"
+scaffold "templates/clickup-replace-allow.template.local" "config/clickup-replace-allow.local"
 
 # integrations/ stays EMPTY on purpose: in this framework a file's existence is the
 # on-switch, so a placeholder .md here would read as a half-configured tool. The

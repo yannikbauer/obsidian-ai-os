@@ -94,6 +94,27 @@ if [ -f README.md ]; then
   fi
 fi
 
+# 3c. Every knob in config/ has a template, and so is forced into the README tree by 3b.
+#     Before 2026-09-08 the six .local files sat at the top level, where export.sh's
+#     NOT_EXPORTED line forced a decision on each one BY NAME. Collapsing them into a
+#     folder collapsed six declarations into one -- and a new file dropped into config/
+#     would inherit the exclusion in silence, which is L008 happening inside the very
+#     mechanism built to stop it.
+#
+#     This is the replacement forcing function, and it runs from the other direction:
+#     the folder is enumerated, and each file must have a shipped template. 3b then
+#     requires that template to appear in the README tree. So a knob still cannot exist
+#     without being described -- the thing that fails is now "no template" rather than
+#     "no NOT_EXPORTED entry".
+if [ -d config ]; then
+  for c in config/*.local; do
+    [ -e "$c" ] || continue
+    n=$(basename "$c" .local)
+    [ -f "templates/$n.template.local" ] \
+      || say "config knob has no template, so nothing forces it into the README: $c (expected templates/$n.template.local)"
+  done
+fi
+
 # 4. No prose may CLAIM A COUNT of hooks or gates. Counts drift, and worse, they drift
 #    across units: "five rules" is enforced by four scripts, one of which covers three
 #    rules on its own. The lists in CLAUDE.md and README enumerate instead, which cannot

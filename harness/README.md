@@ -13,14 +13,33 @@ Those stay in `~/.claude/settings.json`, which is per-machine and not part of th
 ## Configuring read-only zones
 
 `guard-vault-write.sh` blocks writes into folders you never want the AI touching.
-The list is **configuration, not code**: it lives in `_AI/readonly-zones.local`,
+The list is **configuration, not code**: it lives in `_AI/config/readonly-zones.local`,
 one shell glob per line, and **replaces** the built-in defaults (`Archive/`,
-`Attachments/`) when present. The file sits at the `_AI` root next to the other
-`.local` files, so `export.sh` leaves it behind — your folder names describe your
+`Attachments/`) when present. The file sits in `_AI/config/` with the other
+knobs, so `export.sh` leaves the whole folder behind — your folder names describe your
 vault and do not belong in a shared repo.
 
 Keep it in step with the read-only section of `maps/vault-map.md`. The hook is the
 enforcement; the map is the documentation.
+
+## The two vault-write gates, and why there are two
+
+`guard-vault-write.sh` is the real gate: read-only zones, Templater blocks, live
+`tasks` queries, whole-file overwrites, and the two `vault_patch` flags that turn a
+wrong heading address into a silent duplicate section. It matches **`Write`, `Edit`,
+and the `mcp__*__vault_*` tools** — the three routes that name their target in a
+structured argument the hook can read.
+
+**Bash names its target in a string, and no gate can read it reliably.** On 2026-09-07
+an entire session's vault edits went through the shell, so this gate did not run once.
+`guard-bash-vault.sh` is the response, and it is deliberately weaker: it **asks** when a
+command mentions a read-only zone *and* looks mutating, and stays silent otherwise. It
+does not parse paths, so it cannot be correct — it can only be visible.
+
+That asymmetry is the design. A false *ask* costs a keystroke; a false *deny* teaches
+its owner to switch hooks off, which costs every gate here. The seal is the routing
+convention, not this hook: **note writes go through the MCP tools, and fall back to
+`Write`/`Edit` — never Bash.**
 
 ## Writing a hook command
 

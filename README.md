@@ -13,15 +13,19 @@ does, and **gitignored** is not tracked at all.
 _AI/                        the git repo — git lives here, not at the vault root
 ├── CLAUDE.md               the framework / "soul"                     generic
 ├── me.md                   who you are, how to work with you          personal
+├── VERSION                 what a fork has; 0.0.0 until first release  generic
 ├── LICENSE                 Apache-2.0 — without it, nobody may reuse  generic
 ├── NOTICE                  attribution that redistributions must keep  generic
 ├── CONTRIBUTING.md         the generic/personal rule, DCO, licence grant generic
-├── leak-patterns.local     identifiers the export scans for           personal · never exported
-├── leak-allow.local        literals that are deliberately public      personal · never exported
-├── publish.local           where to publish, and as whom              personal · never exported
-├── readonly-zones.local    folders the AI must never write into       personal · never exported
-├── correction-words.local  what counts as you correcting the AI       personal · never exported
-├── clickup-replace-allow.local  doc pages the AI may rewrite whole    personal · never exported
+│
+├── config/                 the knobs — one folder, one lifecycle      personal · never exported
+│   ├── leak-patterns.local     identifiers the export scans for
+│   ├── leak-allow.local        literals that are deliberately public
+│   ├── publish.local           where to publish, and as whom
+│   ├── readonly-zones.local    folders the AI must never write into
+│   ├── correction-words.local  what counts as you correcting the AI
+│   ├── clickup-replace-allow.local  doc pages the AI may rewrite whole
+│   └── README.md               what reads each knob, and how each one degrades
 │
 ├── maps/                   orientation — structure, not content       personal
 │   ├── vault-map.md          how your vault is organised
@@ -43,8 +47,9 @@ _AI/                        the git repo — git lives here, not at the vault ro
 │
 ├── harness/                the harness's own configuration            generic
 │   ├── settings.json         model pin + hooks; symlinked from .claude/
-│   ├── hooks/                deny gates, vault-write trace, two Stop hooks
-│   └── tests/run.sh          fixtures — every hook, including malformed input
+│   ├── hooks/                deny gates, one ask gate, write trace, two Stop hooks
+│   ├── tests/run.sh          fixtures — every hook and gate, including malformed input
+│   └── tests/fixtures/       recorded transcripts the usage fixtures read
 │
 ├── tools/                  read-only scripts skills call by path        generic
 │   ├── session-digest.sh     reduce a transcript to what a retro needs
@@ -54,7 +59,8 @@ _AI/                        the git repo — git lives here, not at the vault ro
 ├── history/                append-forever, fully tracked              personal
 │   ├── file-log.md           AI changes to vault notes outside _AI/
 │   ├── session-log.md        continuity between sessions
-│   └── lessons.md            the learning ledger — what it has been taught
+│   ├── lessons.md            the learning ledger — what it has been taught
+│   └── usage-baseline.md     what this account normally spends, to compare against
 │
 ├── docs/                   thinking, not machinery                    personal · never exported
 │   ├── roadmap.md            living index of intent
@@ -66,7 +72,9 @@ _AI/                        the git repo — git lives here, not at the vault ro
 ├── setup/                                                             generic
 │   ├── install.sh            root glue, scaffolding, and a self-check
 │   ├── export.sh             clean shareable copy + leak check
-│   └── publish.sh            same, but preserves public git history
+│   ├── leak-check.sh         the scan itself — refuses to run if it cannot find _AI
+│   ├── version.sh            reads and bumps VERSION; used only when releasing
+│   └── publish.sh            same as export, but preserves public git history
 │
 ├── .github/workflows/                                                 personal · never exported
 │   ├── verify.yml            gates + public diff on every push; publishes nothing
@@ -91,11 +99,11 @@ safe to re-run:
 | `history/lessons.md` | template | the learning ledger — what the OS has been taught. **Yours starts empty.** Comments across this repo cite lessons as `L001`, `L006` and so on: those are entries from the author's ledger, kept as the *reason* a rule or a test exists. They are provenance, not a cross-reference you can follow — read the sentence around them, not the id. |
 | `docs/README.md` | template | creates the folder and says what it is for |
 | `tmp/README.md` | template | `tmp/` is gitignored, so the folder needs creating |
-| `leak-patterns.local`, `leak-allow.local` | templates | your identifiers |
-| `readonly-zones.local` | template | your folder names |
-| `publish.local` | template | your destination; ships commented out |
-| `correction-words.local` | template | what counts as you correcting the AI; all comments by default, so the built-in English list stays in force |
-| `clickup-replace-allow.local` | template | task-system page ids the AI may rewrite in full; empty by default, so every whole-page rewrite is denied |
+| `config/leak-patterns.local`, `config/leak-allow.local` | templates | your identifiers |
+| `config/readonly-zones.local` | template | your folder names |
+| `config/publish.local` | template | your destination; ships commented out |
+| `config/correction-words.local` | template | what counts as you correcting the AI; all comments by default, so the built-in English list stays in force |
+| `config/clickup-replace-allow.local` | template | task-system page ids the AI may rewrite in full; empty by default, so every whole-page rewrite is denied |
 | `integrations/` | — | **empty on purpose**: a file's existence is the on-switch, so a placeholder here would read as a half-configured tool. The `setup` skill writes the real files. |
 
 `databases/` is not created: it is a placeholder for a search index that does not
@@ -351,11 +359,11 @@ rather than by remembering to exclude it.
 ### The leak check
 
 Every export greps the result for personal tokens. Patterns live in
-`_AI/leak-patterns.local`, which is never exported; edit it as your identifiers
+`_AI/config/leak-patterns.local`, which is never exported; edit it as your identifiers
 change. If anything matches, the run **aborts** rather than publishing.
 
 Some personal tokens legitimately belong in a public repo — the copyright holder's
-name in `LICENSE`, the repo URL in this README. `_AI/leak-allow.local` lists those
+name in `LICENSE`, the repo URL in this README. `_AI/config/leak-allow.local` lists those
 exact literals, which are stripped from a matched line before it is judged. The
 exemption is per-literal, not per-pattern or per-file: your bare first name
 appearing *anywhere else* in `LICENSE` still fails the check, verified by a
@@ -374,7 +382,7 @@ cannot be taken back.
 ### Configuring the destination
 
 `publish.sh` ships in the export, so it holds no personal defaults. Put yours in
-`_AI/publish.local` (sourced as shell, never exported):
+`_AI/config/publish.local` (sourced as shell, never exported):
 
 ```sh
 AIOS_PUBLIC_REMOTE=https://github.com/<you>/<repo>.git
@@ -411,7 +419,7 @@ Both run the same gates first:
 |---|---|
 | `harness/tests/run.sh` | a broken hook — they fail *open*, so breakage is otherwise silent |
 | `actionlint` | a workflow that is itself broken — the thing that runs every other gate |
-| `export.sh` leak check | identifiers you listed in `leak-patterns.local` |
+| `export.sh` leak check | identifiers you listed in `config/leak-patterns.local` |
 | **gitleaks** | the generic classes you would not have predicted — API keys, tokens, private keys |
 | `install.sh` into a scratch vault | an export that passes every check and then does not install |
 
@@ -439,7 +447,7 @@ diff against these, in order:
 3. **Personal circumstances** — health, money, relationships, living situation.
    Skills describing "what to do when the user is low on energy" drift here easily.
 4. **Identifiers** the patterns do not know yet: a new calendar, a new account, a
-   new tool's workspace ID. Anything that matches, add to `leak-patterns.local`.
+   new tool's workspace ID. Anything that matches, add to `config/leak-patterns.local`.
 5. **Paths that expose vault structure** beyond what `templates/` already shows.
 6. **Tone** — text written *to* you rather than *for* a reader. Not a leak, but it
    reads as unfinished in a public repo.
@@ -460,6 +468,46 @@ what you approved is what ships.
 Without a session, run **Publish to public repo** from the Actions tab and type
 `publish` to confirm. Locally, `bash _AI/setup/publish.sh` does the same with a
 diffstat and a prompt.
+
+### Versioning
+
+Publishing syncs content. **Releasing** gives that content a name someone else can
+refer to — which is the only reason a version exists here. Your own git history
+already answers *what changed* for you; a fork has no access to it, so the public
+repo needs an anchor of its own.
+
+`publish.sh` therefore asks once, at the point you are already reviewing the diff:
+
+```
+Release as? [patch/minor/major/keep]
+```
+
+- **patch** — fixes and wording
+- **minor** — new behaviour a plain `git pull` absorbs
+- **major** — **your install needs manual action**: a renamed `.local` knob, a moved
+  path, scaffolding `install.sh` cannot add on a re-run
+- **keep** — publish without cutting a release
+
+That last distinction is the one carrying real information, and it is the reason
+this is SemVer rather than a date. Everything else about the scheme is convention.
+
+Cutting a release writes `VERSION`, tags the public repo `vX.Y.Z`, and prepends an
+entry to a public `CHANGELOG.md`. The entry is **generated** from your private commit
+subjects since the previous tag — never hand-written, so it cannot drift from what
+actually shipped — and it goes through the same leak check as the commit message,
+because a commit subject is metadata that the export's file scan never sees. A hit
+aborts the release rather than degrading quietly: a changelog is a permanent file,
+not a message.
+
+Two deliberate refusals. `--yes` (how CI publishes) keeps the current version, so a
+machine never decides that a sync was a release. `--branch` carries no release
+either — the branch is a proposal that may never merge, and a tag pointing into an
+abandoned branch is a permanent claim about a version that never shipped. Re-using
+an existing tag is refused outright, because unlike a commit a moved tag rewrites
+what an already-cloned copy resolves to.
+
+`CHANGELOG.md` lives only in the public repo. It accumulates there across releases,
+which is why the sync excludes it from `--delete`.
 
 ### One-time setup
 
@@ -516,8 +564,9 @@ their contribution, and the licence terminates for anyone who brings a patent su
 work. MIT is silent on patents entirely. Relevant enough in AI tooling to be worth the
 longer file, at no cost to how freely you can use this.
 
-*(Versions published before 2026-09-07 were MIT. Those remain MIT for anyone who has them —
-a licence change never reaches backwards.)*
+*(Everything published before 2026-09-07 was MIT, and predates the first tagged release.
+Those copies remain MIT for anyone who has them: a licence change never reaches backwards.
+From the first tag on, the tag says which terms a copy came under.)*
 
-If you fork this, put your own destination in `_AI/publish.local` rather than
+If you fork this, put your own destination in `_AI/config/publish.local` rather than
 editing the script — see [Sharing your copy](#sharing-your-copy).

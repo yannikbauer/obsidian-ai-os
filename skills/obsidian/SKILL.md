@@ -8,14 +8,20 @@ description: >
 
 Read/write access to the user's Obsidian vault (plain markdown files). This skill is generic; the specific folder layout, prefixes, tags, and conventions live in **`_AI/maps/vault-map.md`** — read it before working in the vault.
 
-**Route: disk by default, API only for what disk cannot do.** The vault is files, and the filesystem is the faster, tokenless route that also works while the app is closed — so content reads and writes go through disk. Some notes tools additionally expose a **local API** (a command endpoint, a URI scheme, a plugin server). If `_AI/integrations/<notes-tool>.md` exists it documents that layer and the exact endpoints; if it does not, there is no API and disk is the only route — which costs no capability, only the four items below. Reach for the API only to:
+**Route: disk by default for reads, the API first for writes.** The vault is files, and the filesystem is the faster, tokenless route that also works while the app is closed — so *reads* go through disk. Some notes tools additionally expose a **local API** (a command endpoint, a URI scheme, a plugin server). If `_AI/integrations/<notes-tool>.md` exists it documents that layer and the exact endpoints; if it does not, there is no API and disk is the only route — which costs no capability, only the four items below. Reach for the API only to:
 
 1. **Run a template.** Template blocks are code the *app* evaluates; a file written to disk gets none of it. Never hand-write a note whose template the app can render — trigger the app's own create-note command and let it render.
 2. **Execute an app command** that has no filesystem equivalent.
 3. **Patch one section** of a note without rewriting the file — the safe way to edit a note the user may have open.
 4. **Ask the app what it knows** — search, tags, metadata — rather than re-deriving it by grepping. What the plugin returns is what the user sees; what grep returns is your reconstruction of it.
 
-**One writer per file.** API writes and disk writes are two uncoordinated writers with no locking — pick one route per write, never both in one operation. And **the API needs the app running**, so nothing scheduled, pushed or headless may depend on it.
+**Writes are different, and the reason is the harness, not capability.** A note write must happen on a route the safety hooks can *see*. An API call names its target in a structured argument, and a file tool names it in a dedicated field; both are matchable. **A shell command names it in a string, and no gate can read that** — so a `cat >`, `sed -i`, `tee` or heredoc into a note runs with every read-only-zone, template and live-query guard silently switched off. This is not hypothetical: on 2026-09-07 an entire session's vault edits took that route and fired nothing, including edits to a note built out of live query blocks.
+
+So, in order: **the notes API if one is configured** (surgical, and it can check the file has not changed under you), **otherwise the file-editing tools**, and **never the shell**. Prefer editing one section over rewriting a file, whichever route you are on — a whole-file write is how live query blocks and template logic die.
+
+**One writer per file.** API writes and disk writes are two uncoordinated writers with no locking — pick one route per write, never both in one operation. And **the API needs the app running**, so nothing scheduled, pushed or headless may depend on it; that is what the file-tool fallback is for.
+
+**When a section address is involved, ask the app for it — never retype it.** Section targeting matches heading text, so a rename or a difference in capitalisation makes an edit miss. It should *fail* when it misses: leave any "create the target if it is absent" option off, because with it on, a mistyped heading quietly creates a second one and writes there instead of erroring.
 
 ## Core principles
 

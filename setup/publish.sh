@@ -20,6 +20,11 @@
 #   ./publish.sh --dry-run          export and diff only — never pushes
 #   ./publish.sh --yes              no confirmation prompt (CI)
 #   ./publish.sh --branch sync/main push to a branch instead, for review via PR
+#   ./publish.sh --version minor    cut a release: bump VERSION, tag, write CHANGELOG
+#
+# A RELEASE is a separate act from a publish. Publishing syncs content; releasing
+# gives that content a name a fork can refer to. Interactive runs are asked once;
+# --yes keeps the current version, so CI never invents one. See setup/version.sh.
 #
 # Environment overrides:
 #   AIOS_PUBLIC_REMOTE      destination repo
@@ -35,14 +40,14 @@ AI_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Your destination and identity are PERSONAL, so they are not baked in here --
 # this script ships in the export and must be generic for whoever forks it.
-# Settings resolve in order: environment, then _AI/publish.local (never exported,
+# Settings resolve in order: environment, then _AI/config/publish.local (never exported,
 # same convention as leak-patterns.local), then nothing.
-[ -f "$AI_DIR/publish.local" ] && . "$AI_DIR/publish.local"
+[ -f "$AI_DIR/config/publish.local" ] && . "$AI_DIR/config/publish.local"
 
 PUBLIC_REMOTE="${AIOS_PUBLIC_REMOTE:-}"
 if [ -z "$PUBLIC_REMOTE" ]; then
   cat >&2 <<'MSG'
-! No destination configured. Create _AI/publish.local:
+! No destination configured. Create _AI/config/publish.local:
 !
 !     AIOS_PUBLIC_REMOTE=https://github.com/<you>/<repo>.git
 !     AIOS_PUBLIC_GIT_NAME="Your Name"
@@ -62,14 +67,14 @@ PUBLIC_GIT_EMAIL="${AIOS_PUBLIC_GIT_EMAIL:-}"
 if [ -z "$PUBLIC_GIT_EMAIL" ]; then
   echo "! AIOS_PUBLIC_GIT_EMAIL is unset — refusing to publish with your ~/.gitconfig" >&2
   echo "! identity, which would put your real address in public commit metadata." >&2
-  echo "! Set it in _AI/publish.local (a <user>@users.noreply.github.com address works)." >&2
+  echo "! Set it in _AI/config/publish.local (a <user>@users.noreply.github.com address works)." >&2
   exit 64
 fi
 
 sync_metadata () {
   # Topics and description are repo METADATA -- they live in GitHub's database,
   # not in any file, so nothing in the export can carry them and they drift
-  # silently. Declaring them in publish.local makes them versioned like the rest.
+  # silently. Declaring them in config/publish.local makes them versioned like the rest.
   [ -n "${AIOS_PUBLIC_TOPICS:-}${AIOS_PUBLIC_DESCRIPTION:-}" ] || return 0
 
   if ! command -v gh >/dev/null; then
@@ -83,12 +88,12 @@ sync_metadata () {
   slug="${slug##*github.com:}"
 
   if [ -n "${AIOS_PUBLIC_TOPICS:-}" ]; then
-    # PUT replaces the whole set, which is the point: publish.local is the single
+    # PUT replaces the whole set, which is the point: config/publish.local is the single
     # source of truth, so removing a topic there removes it on GitHub too.
     want="$(printf '%s\n' $AIOS_PUBLIC_TOPICS | sort | tr '\n' ' ')"
     have="$(gh api "repos/$slug/topics" --jq '.names[]' 2>/dev/null | sort | tr '\n' ' ')"
     if [ "$want" = "$have" ]; then
-      echo "  topics already match publish.local"
+      echo "  topics already match config/publish.local"
     else
       set -- --method PUT "repos/$slug/topics"
       for t in $AIOS_PUBLIC_TOPICS; do set -- "$@" -f "names[]=$t"; done
@@ -107,7 +112,7 @@ sync_metadata () {
   if [ -n "${AIOS_PUBLIC_DESCRIPTION:-}" ]; then
     have_d="$(gh api "repos/$slug" --jq '.description // ""' 2>/dev/null)"
     if [ "$have_d" = "$AIOS_PUBLIC_DESCRIPTION" ]; then
-      echo "  description already matches publish.local"
+      echo "  description already matches config/publish.local"
     elif gh api --method PATCH "repos/$slug" -f "description=$AIOS_PUBLIC_DESCRIPTION" >/dev/null 2>&1; then
       echo "  description updated"
     else
@@ -119,6 +124,7 @@ sync_metadata () {
 DRY_RUN=0
 ASSUME_YES=0
 BRANCH=""
+VERSION_ARG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
@@ -129,12 +135,25 @@ while [ $# -gt 0 ]; do
       BRANCH="$1"
       ;;
     --branch=*) BRANCH="${1#--branch=}" ;;
+    --version)
+      shift
+      [ $# -gt 0 ] || { echo "! --version needs major, minor, patch, keep or X.Y.Z" >&2; exit 64; }
+      VERSION_ARG="$1"
+      ;;
+    --version=*) VERSION_ARG="${1#--version=}" ;;
     *) echo "! unknown argument: $1" >&2; exit 64 ;;
   esac
   shift
 done
 
 command -v rsync >/dev/null || { echo "! rsync not found" >&2; exit 1; }
+
+# The exported paths, as a git pathspec. Named once because it is used twice --
+# the public commit body and the changelog -- and the two must not drift apart.
+# It already had: tools/ ships (it holds the scripts skills call by path) but was
+# missing here, so a tools-only change reached the public repo with an empty
+# summary. Same class of bug as ledger L008, one layer up.
+EXPORTED_PATHS="CLAUDE.md README.md LICENSE NOTICE CONTRIBUTING.md .gitignore VERSION skills harness tools templates setup"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -173,7 +192,12 @@ fi
 # --delete makes the public repo mirror the export exactly: a file removed from
 # the allowlist disappears publicly instead of lingering. --exclude .git keeps
 # the public history (that is the whole point of this script).
-rsync -a --delete --exclude '.git' "$WORK/export/" "$WORK/public/"
+#
+# CHANGELOG.md is excluded because it is GENERATED INTO the public repo and lives
+# only there: it accretes one entry per release, so it is a property of the
+# published history rather than of any single export. Without the exclusion
+# --delete would remove it on every run and the file could never accumulate.
+rsync -a --delete --exclude '.git' --exclude 'CHANGELOG.md' "$WORK/export/" "$WORK/public/"
 
 # Tell a GitHub Actions caller whether anything actually changed, so it can skip
 # opening an empty PR. Harmless and invisible outside CI ($GITHUB_OUTPUT is unset).
@@ -185,12 +209,102 @@ if git diff --cached --quiet; then
   echo
   echo "No changes — public repo is already up to date."
   # Metadata still gets a pass: topics and description live in GitHub's database,
-  # not in the tree, so they can drift from publish.local while every file matches.
+  # not in the tree, so they can drift from config/publish.local while every file matches.
   # Exiting here would make a topics-only edit impossible to apply.
   if [ "$DRY_RUN" -ne 1 ] && [ -z "$BRANCH" ]; then sync_metadata; fi
   exit 0
 fi
 signal_changed true
+
+# --- 3b. release: version + changelog ----------------------------------------
+# A release is a deliberate act, exactly like the publish it rides on. So:
+#
+#   --yes (CI)  keeps the current version. A machine syncs content; it does not
+#               decide that content is a release.
+#   --branch    carries no release either. The branch is a proposal that may never
+#               merge, and a tag pointing into an abandoned branch is worse than no
+#               tag: it is a permanent claim about a version that never shipped.
+#
+# The changelog gains an entry ONLY when a version is cut. That is what keeps it a
+# list of releases rather than a second, staler copy of the git log.
+RELEASE=""
+LEVEL="${VERSION_ARG:-}"
+
+if [ -n "$BRANCH" ] && [ -n "$LEVEL" ]; then
+  echo "  (--version ignored: --branch publishes a proposal, not a release)"
+  LEVEL=""
+elif [ -z "$LEVEL" ] && [ -z "$BRANCH" ] && [ "$ASSUME_YES" -ne 1 ] && [ -r /dev/tty ]; then
+  CURRENT_V="$(bash "$SCRIPT_DIR/version.sh" current)"
+  echo
+  echo "Current version: $CURRENT_V"
+  echo "  patch  fixes and wording       minor  new behaviour, absorbed by a pull"
+  echo "  major  forks must act          keep   publish without cutting a release"
+  printf 'Release as? [patch/minor/major/keep] '
+  read -r LEVEL </dev/tty
+fi
+
+case "$LEVEL" in
+  ""|keep|k|n|N) RELEASE="" ;;
+  major|minor|patch)
+    RELEASE="$(bash "$SCRIPT_DIR/version.sh" bump \
+                 "$(bash "$SCRIPT_DIR/version.sh" current)" "$LEVEL")"
+    ;;
+  *)
+    if bash "$SCRIPT_DIR/version.sh" validate "$LEVEL"; then
+      RELEASE="$LEVEL"
+    else
+      echo "! not a level or a version: '$LEVEL' (want major, minor, patch, keep or X.Y.Z)" >&2
+      exit 64
+    fi
+    ;;
+esac
+
+if [ -n "$RELEASE" ]; then
+  # Refuse to reuse a tag. The public repo is the record of what was released, and
+  # unlike a commit a MOVED tag rewrites what an existing clone already resolves to
+  # -- the record would not merely gain an error, it would lose the truth.
+  if git rev-parse -q --verify "refs/tags/v$RELEASE" >/dev/null 2>&1; then
+    echo "! v$RELEASE is already tagged on the public repo. Pick a higher version." >&2
+    exit 1
+  fi
+  printf '%s\n' "$RELEASE" > "$WORK/public/VERSION"
+
+  # Entries cover everything since the LAST RELEASE, not since the last publish:
+  # several publishes can sit between two tags, and a since-last-publish range
+  # would silently drop every change but the most recent.
+  PREV_TAG="$(git tag -l 'v*' --sort=-v:refname | head -1)"
+  REL_FROM=""
+  if [ -n "$PREV_TAG" ]; then
+    REL_FROM="$(git log -1 --format=%B "$PREV_TAG" 2>/dev/null \
+                | sed -n 's/^Source-commit: \([0-9a-f]\{7,\}\).*/\1/p' | head -1)"
+  fi
+  ENTRIES=""
+  if [ -n "$REL_FROM" ] && (cd "$AI_DIR" && git cat-file -e "${REL_FROM}^{commit}" 2>/dev/null); then
+    ENTRIES="$(cd "$AI_DIR" && git log --reverse --format='%s' "${REL_FROM}..HEAD" -- \
+                 $EXPORTED_PATHS 2>/dev/null \
+               | sed -E 's/#([0-9]+)/item \1/g' | sed 's/^/- /')"
+  fi
+  [ -n "$ENTRIES" ] || ENTRIES="- Initial tagged release."
+
+  # Commit subjects are metadata, so the export's leak check never saw them. The
+  # commit-body path below may degrade to a plain message when one is dirty; this
+  # one MUST NOT -- a changelog is a permanent file in the tree, so a hit aborts.
+  printf '%s\n' "$ENTRIES" > "$WORK/changelog-entry.txt"
+  if ! bash "$SCRIPT_DIR/leak-check.sh" "$WORK/changelog-entry.txt" >/dev/null 2>&1; then
+    echo "! A commit subject in this release carries a personal token, and a changelog" >&2
+    echo "! entry is a permanent public FILE rather than a message. Aborting." >&2
+    echo "! Reword the private commit, or publish with --version keep." >&2
+    exit 2
+  fi
+
+  printf '%s\n' "$ENTRIES" \
+    | bash "$SCRIPT_DIR/version.sh" changelog \
+        "$WORK/public/CHANGELOG.md" "$RELEASE" "$(date +%Y-%m-%d)"
+
+  git add -A
+  echo
+  echo "Releasing v$RELEASE"
+fi
 
 echo
 echo "Changes to publish:"
@@ -243,7 +357,7 @@ LAST_SRC="$(git log -1 --format=%B 2>/dev/null \
 
 if [ -n "$LAST_SRC" ] && (cd "$AI_DIR" && git cat-file -e "${LAST_SRC}^{commit}" 2>/dev/null); then
   CAND="$(cd "$AI_DIR" && git log --reverse --format='%s' "${LAST_SRC}..HEAD" -- \
-            CLAUDE.md README.md LICENSE .gitignore skills harness templates setup 2>/dev/null \
+            $EXPORTED_PATHS 2>/dev/null \
           | sed -E 's/#([0-9]+)/item \1/g')"
   if [ -n "$CAND" ]; then
     printf '%s\n' "$CAND" > "$WORK/msg.txt"
@@ -264,13 +378,27 @@ if [ -n "$LAST_SRC" ] && (cd "$AI_DIR" && git cat-file -e "${LAST_SRC}^{commit}"
 fi
 
 # Source-commit is a trailer, not part of the subject, so the subject is free to
-# carry the change. publish.sh reads it back on the next run.
+# carry the change. publish.sh reads it back on the next run -- and a release reads
+# it off the PREVIOUS TAG's commit to find what range the changelog entry covers,
+# which is why the trailer matters more than it looks.
+TRAILERS="Source-commit: $SRC_SHA"
+[ -n "$RELEASE" ] && TRAILERS="$TRAILERS
+Version: $RELEASE"
+
 if [ -n "$BODY" ]; then
   git -c "user.name=$PUBLIC_GIT_NAME" -c "user.email=$PUBLIC_GIT_EMAIL" \
-      commit -q -m "$SUBJECT" -m "$BODY" -m "Source-commit: $SRC_SHA"
+      commit -q -m "$SUBJECT" -m "$BODY" -m "$TRAILERS"
 else
   git -c "user.name=$PUBLIC_GIT_NAME" -c "user.email=$PUBLIC_GIT_EMAIL" \
-      commit -q -m "$SUBJECT" -m "Source-commit: $SRC_SHA"
+      commit -q -m "$SUBJECT" -m "$TRAILERS"
+fi
+
+# An annotated tag carries a TAGGER, which is commit metadata by another name and
+# is invisible to every file-level check -- so it is pinned exactly like the commit
+# identity above, and for the same reason.
+if [ -n "$RELEASE" ]; then
+  git -c "user.name=$PUBLIC_GIT_NAME" -c "user.email=$PUBLIC_GIT_EMAIL" \
+      tag -a "v$RELEASE" -m "AI OS v$RELEASE"
 fi
 
 if [ -n "$BRANCH" ]; then
@@ -284,8 +412,22 @@ if [ -n "$BRANCH" ]; then
   # Deliberately no metadata sync here: the branch is a proposal, and topics
   # would take effect on the live repo before anyone approved it.
 else
-  git push -q origin HEAD
+  # One push for both refs: a tag that lands without its commit, or a commit whose
+  # tag failed separately, leaves the public record in a state nothing here fixes.
+  if [ -n "$RELEASE" ]; then
+    git push -q origin HEAD "refs/tags/v$RELEASE"
+  else
+    git push -q origin HEAD
+  fi
   echo
   echo "Published. $PUBLIC_REMOTE is now at $(git rev-parse --short HEAD)."
+
+  # Bump the private VERSION only now. The write is the LAST thing that happens,
+  # so an aborted or failed push leaves this repo claiming the older version --
+  # which is the true one, because nothing was released.
+  if [ -n "$RELEASE" ]; then
+    printf '%s\n' "$RELEASE" > "$AI_DIR/VERSION"
+    echo "Tagged v$RELEASE. _AI/VERSION is now $RELEASE -- commit it."
+  fi
   sync_metadata
 fi

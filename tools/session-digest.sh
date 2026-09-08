@@ -27,11 +27,11 @@ MAX_TURN_CHARS=600
 #
 # The default is English because the rest of the OS is, but the user it watches need
 # not be, and plenty of people think in one language and work in another. So it is
-# CONFIGURATION, not code: _AI/correction-words.local holds one extended-regex alternative per line
-# and REPLACES the default when present, the same contract readonly-zones.local uses.
+# CONFIGURATION, not code: _AI/config/correction-words.local holds one extended-regex alternative per line
+# and REPLACES the default when present, the same contract config/readonly-zones.local uses.
 # A word list is the wrong thing to hardcode in a file that ships to other people.
 CORRECTION_RE='^(no|nope|not quite|wrong)\b|\b(actually|instead|revert|undo|misread|incorrect|not what i|rather than|you (missed|forgot|misunderstood)|that.s (wrong|not)|don.t |do not )'
-CORRECTION_FILE="${AIOS_DIR:-$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)}/correction-words.local"
+CORRECTION_FILE="${AIOS_DIR:-$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)}/config/correction-words.local"
 if [ -f "$CORRECTION_FILE" ]; then
   _re=$(grep -v '^[[:space:]]*#' "$CORRECTION_FILE" 2>/dev/null | grep -v '^[[:space:]]*$' \
         | tr '\n' '|' | sed 's/|$//')

@@ -36,3 +36,13 @@ deny() { # deny <reason> — emits the PreToolUse denial and stops the tool call
     "$(printf '%s' "$1" | /usr/bin/jq -Rs .)"
   exit 2
 }
+
+ask() { # ask <reason> — surfaces the call for a human decision instead of blocking it
+  # Deliberately NOT deny. Used where the hook cannot tell a real violation from a
+  # false positive (see guard-bash-vault.sh), and where a wrong deny would be worse
+  # than a prompt. Not traced: an ask is not evidence of a violation, and logging
+  # every one would drown the deny log that suggest-retro.sh reads.
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":%s}}\n' \
+    "$(printf '%s' "$1" | /usr/bin/jq -Rs .)"
+  exit 0
+}

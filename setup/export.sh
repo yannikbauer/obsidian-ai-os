@@ -30,11 +30,15 @@ mkdir -p "$TARGET"
 # This is an allowlist — a new personal folder is excluded by default, not by rule.
 cp    "$AI_DIR/CLAUDE.md"      "$TARGET/CLAUDE.md"
 cp    "$AI_DIR/.gitignore"     "$TARGET/.gitignore"
+# VERSION names what a fork actually has. It is the one file here whose whole
+# purpose is to be read by someone WITHOUT access to this repo -- the private
+# history answers "what changed" for you, and answers nothing for them.
+cp    "$AI_DIR/VERSION"        "$TARGET/VERSION"
 [ -f "$AI_DIR/README.md" ] && cp "$AI_DIR/README.md" "$TARGET/README.md"
 [ -f "$AI_DIR/CONTRIBUTING.md" ] && cp "$AI_DIR/CONTRIBUTING.md" "$TARGET/CONTRIBUTING.md"
 # A public repo without a licence is all-rights-reserved: nobody may legally reuse
 # it. The licence names the copyright holder, which is why the leak check needs
-# leak-allow.local -- see below.
+# config/leak-allow.local -- see below.
 cp    "$AI_DIR/LICENSE"        "$TARGET/LICENSE"
 # NOTICE is not optional decoration: section 4 of Apache-2.0 requires redistributions
 # to carry it, so an export without it hands people a licence they cannot comply with.
@@ -65,7 +69,15 @@ cp -R "$AI_DIR/setup"         "$TARGET/setup"
 # forces a deliberate decision instead of inheriting the allowlist's silent default.
 # (Ledger L008: an allowlist's safe default for personal data is its silent default for
 # generic code — that is how tools/ nearly shipped a skill without its helper.)
-# NOT_EXPORTED: me.md maps integrations history tmp databases docs .github(except FUNDING.yml) correction-words.local leak-allow.local leak-patterns.local publish.local readonly-zones.local clickup-replace-allow.local
+#
+# `config/` is one entry standing for six knobs (2026-09-08, roadmap #36). That trades a
+# forced decision per FILE for a forced decision per FOLDER, and a new knob dropped into
+# config/ would inherit the exclusion silently -- L008 again, inside the mechanism built
+# to prevent it. check-coverage.sh closes it from the other side: every file in config/
+# must have a templates/*.template.local, and every such template must appear in the
+# README tree. A knob with no template is now the thing that fails, rather than a knob
+# with no declaration.
+# NOT_EXPORTED: me.md maps integrations history tmp databases docs .github(except FUNDING.yml) config
 
 # strip any stray junk
 find "$TARGET" -name '.DS_Store' -delete
@@ -92,10 +104,10 @@ fi
 #      ambient identity would put your real address in the first public commit,
 #      permanently and unscrubbably.
 #
-# publish.local supplies your chosen public identity if you have one; otherwise
+# config/publish.local supplies your chosen public identity if you have one; otherwise
 # the fallback is deliberately impersonal. ("@localhost" has no dot-TLD, so it
 # does not trip the generic email pattern above.)
-[ -f "$AI_DIR/publish.local" ] && . "$AI_DIR/publish.local"
+[ -f "$AI_DIR/config/publish.local" ] && . "$AI_DIR/config/publish.local"
 EXPORT_GIT_NAME="${AIOS_PUBLIC_GIT_NAME:-AI OS export}"
 EXPORT_GIT_EMAIL="${AIOS_PUBLIC_GIT_EMAIL:-ai-os@localhost}"
 (
