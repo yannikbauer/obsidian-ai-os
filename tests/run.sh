@@ -653,6 +653,30 @@ case "$cvdout" in
   *) echo "  FAIL check-coverage missed an empty skill description" >&2; FAIL=1 ;;
 esac
 
+# --- the gates must pass on the PUBLISHED repo, not only on an export ---------
+# Both gates failed on a fresh clone of the public repo while passing here and inside a
+# fresh export. CHANGELOG.md is generated INTO the public repo and lives only there, so an
+# export never has one and check 3 never saw it — but a clone tracks it, and check 3
+# enumerates what is tracked. The published artifact is the one representation nobody was
+# running the gates on, and it is the only one a stranger sees (L003).
+#
+# So this fixture is the published SHAPE: an export plus a changelog, under git.
+PUBTMP=$(mktemp -d)
+cp -R "$HOOKS/../tools" "$HOOKS/../setup" "$HOOKS/../.claude" "$HOOKS/../templates" \
+      "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$PUBTMP/" 2>/dev/null
+printf '# Changelog\n\n## v0.0.0 — 1970-01-01\n\n- Initial tagged release.\n' > "$PUBTMP/CHANGELOG.md"
+( cd "$PUBTMP" && git init -q >/dev/null 2>&1 \
+  && git add CHANGELOG.md CLAUDE.md README.md tools setup templates .claude >/dev/null 2>&1 )
+pubout=$(cd "$PUBTMP" && sh tools/check-coverage.sh 2>&1)
+if [ -z "$pubout" ]; then
+  echo "  ok   check-coverage passes on the published shape (export + CHANGELOG, tracked)"
+else
+  echo "  FAIL check-coverage fails on a clone of the published repo:" >&2
+  printf '%s\n' "$pubout" >&2
+  FAIL=1
+fi
+rm -rf "$PUBTMP"
+
 # --- a registered hook whose file is gone (L019) ------------------------------
 # The failure this catches is silent by construction: hooks fail OPEN, so a settings file
 # that points at a moved script looks fully wired and enforces nothing. Check 1 only proves

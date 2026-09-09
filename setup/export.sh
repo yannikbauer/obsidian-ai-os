@@ -55,6 +55,17 @@ if [ -f "$AI_DIR/.github/FUNDING.yml" ]; then
   mkdir -p "$TARGET/.github"
   cp "$AI_DIR/.github/FUNDING.yml" "$TARGET/.github/FUNDING.yml"
 fi
+
+# The public repo's CI. A SEPARATE, generic workflow rather than an exception on verify.yml:
+# copying that one out would drag the public-diff rendering and the private remote's name with
+# it. This runs the two gates and an install, needs no secret, and is what a contributor's pull
+# request should trigger -- CONTRIBUTING.md asks them to run the suite and, until now, nothing
+# checked that they had. It is renamed on the way out: `public-ci.yml` says what it is in here,
+# `ci.yml` is what it should be called there.
+if [ -f "$AI_DIR/.github/workflows/public-ci.yml" ]; then
+  mkdir -p "$TARGET/.github/workflows"
+  cp "$AI_DIR/.github/workflows/public-ci.yml" "$TARGET/.github/workflows/ci.yml"
+fi
 # tests/ ships beside the hooks it exercises: a fork that cannot run the suite cannot
 # tell a working gate from a dead one.
 cp -R "$AI_DIR/tests"         "$TARGET/tests"
@@ -83,7 +94,13 @@ cp -R "$AI_DIR/setup"         "$TARGET/setup"
 # must have a templates/*.template.local, and every such template must appear in the
 # README tree. A knob with no template is now the thing that fails, rather than a knob
 # with no declaration.
-# NOT_EXPORTED: me.md maps integrations history tmp databases docs .github(except FUNDING.yml) config
+# CHANGELOG.md is not here because it is not in THIS repo at all: publish.sh generates it
+# into the public one, where it accretes an entry per release. It still has to be declared,
+# because check 3 enumerates what is TRACKED and the public clone tracks it -- and that is
+# the representation nobody was running the gates on. Both gates failed on a fresh clone of
+# the published repo while passing here and inside a fresh export, because an export has no
+# changelog (L003, on the repo that documents L003).
+# NOT_EXPORTED: me.md maps integrations history tmp databases docs .github(except FUNDING.yml and the public CI workflow) config CHANGELOG.md
 
 # strip any stray junk
 find "$TARGET" -name '.DS_Store' -delete

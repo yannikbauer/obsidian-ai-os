@@ -154,9 +154,10 @@ written at install time instead of committed.
     │   ├── version.sh            reads and bumps VERSION; used only when releasing
     │   └── publish.sh            same as export, but preserves public git history
     │
-    ├── .github/workflows/                                                      personal · never exported
+    ├── .github/workflows/                                                      personal · one exception
     │   ├── verify.yml            gates + public diff on every push; publishes nothing
-    │   └── publish.yml           manual trigger; the only thing that goes public
+    │   ├── publish.yml           manual trigger; the only thing that goes public
+    │   └── public-ci.yml         the PUBLIC repo's CI; ships as ci.yml
     │
     ├── tmp/                    snapshots, scratch, hook traces                 gitignored
     └── databases/              future search index                             gitignored

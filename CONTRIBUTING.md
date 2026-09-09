@@ -76,7 +76,9 @@ forever. That is not something a later change can take back.
 
 ## Practical
 
-- **Run the test suite**: `sh tests/run.sh` — every assertion must pass.
+- **Run the test suite**: `sh tests/run.sh` — every assertion must pass. CI runs it and the
+  coverage check on every push and pull request, so this is a faster loop rather than an
+  honour system.
 - **Run the coverage check**: `sh tools/check-coverage.sh` — it enforces the enumerations
   that go stale silently (hooks registered, templates scaffolded, export coverage declared,
   no counts or rule-ordinals in prose).

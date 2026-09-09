@@ -1,0 +1,53 @@
+# The PUBLIC repo's CI. Shipped by export.sh's narrow single-file exception and renamed
+# to ci.yml on the way out; `publish.yml` and `verify.yml` stay private because they name
+# the private remote and its publishing mechanics.
+#
+# It deliberately also runs HERE. That duplicates verify.yml's first gate on every push,
+# which is a few seconds of CI in exchange for never shipping a workflow nobody has run —
+# the same failure as a hook registered at a path that does not exist. actionlint in
+# verify.yml lints this file before it can reach anyone else.
+#
+# No secret, no remote name, nothing personal. Everything it does, a stranger's fork does
+# identically.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # The hooks parse their input with jq at an absolute path and fail OPEN without it,
+      # so a missing jq does not break the suite, it silently stops the suite from meaning
+      # anything. Assert it before running anything that depends on it.
+      - name: jq is where the hooks expect it
+        run: test -x /usr/bin/jq || { echo "::error::jq missing at /usr/bin/jq"; exit 1; }
+
+      - name: Hook suite
+        run: bash tests/run.sh
+
+      # The enumerations that go silently wrong: a hook that is registered but absent, a
+      # template install.sh never scaffolds, a skill missing from the README tree.
+      - name: Enumerations match reality
+        run: sh tools/check-coverage.sh
+
+      # A repo that passes every check and then fails to install is worse than no repo.
+      # Install it exactly as a stranger would, then run the suite from the installed copy.
+      - name: Installs into a clean vault
+        run: |
+          VAULT="$RUNNER_TEMP/scratch-vault"
+          mkdir -p "$VAULT/.obsidian" "$VAULT/_AI"
+          cp -R . "$VAULT/_AI"
+          rm -rf "$VAULT/_AI/.git"
+          bash "$VAULT/_AI/setup/install.sh"
+          bash "$VAULT/_AI/tests/run.sh"

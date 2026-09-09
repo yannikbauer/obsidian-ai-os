@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.1 — 2026-09-09
+
+- Record the v0.2.0 release
+- Fix the gates on a published clone, and ship CI to the public repo (item 38)
+
 ## v0.2.0 — 2026-09-09
 
 > **Upgrading from v0.1.0 takes one command, not just a pull.** `harness/` and `skills/`
