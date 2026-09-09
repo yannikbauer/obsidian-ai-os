@@ -10,9 +10,30 @@
 
 [ -x /usr/bin/jq ] || exit 0
 
-# ${CLAUDE_PROJECT_DIR} is the vault root, not _AI/.
-AIOS_DIR="${CLAUDE_PROJECT_DIR:-.}/_AI"
-export AIOS_DIR
+# --- where things are --------------------------------------------------------
+# Two paths every hook needs, resolved ONCE, here. Until 2026-09-09 each hook worked
+# them out for itself, with three different fallbacks ('.', '', and the script's own
+# location), and every one of them ASSUMED the vault root is the directory the session
+# started in. That assumption holds only by convention — it is true because sessions
+# start at the vault, not because anything makes it true. One seam is easier to move
+# than four assumptions, which is what a second vault, or a session started from inside
+# the OS, would have to move.
+#
+# AIOS_DIR is derived from this file's own location, always <AI>/.claude/hooks/. That
+# removes the last place the directory name `_AI` was written into a hook.
+AIOS_DIR="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd)"
+[ -n "$AIOS_DIR" ] || exit 0
+
+# VAULT_DIR is the vault this install serves, in order of authority:
+#   1. $AIOS_VAULT_DIR       explicit override — the seam a second vault would use
+#   2. $CLAUDE_PROJECT_DIR   the harness's own signal; correct for as long as sessions
+#                            start at the vault root
+#   3. the parent of AIOS_DIR — the layout itself, and a far better guess than the '.'
+#                            the hooks used to fall back to
+# The location is deliberately LAST: deriving from it first pins a hook to whatever tree
+# it was copied into, and ignores the one signal the harness actually provides.
+VAULT_DIR="${AIOS_VAULT_DIR:-${CLAUDE_PROJECT_DIR:-$(dirname "$AIOS_DIR")}}"
+export AIOS_DIR VAULT_DIR
 
 INPUT=$(cat)
 [ -n "$INPUT" ] || exit 0

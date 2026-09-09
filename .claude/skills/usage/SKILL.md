@@ -25,6 +25,11 @@ it and say what changed — *"the 5h peak is up 40% on the first baseline"* is w
 repeating a number the user can already see is not. If the current reading is materially
 different, offer to append a new baseline block.
 
+**Never compare session counts across baselines.** Sessions are counted by unique
+`sessionId`, and a resumed session keeps its id — so the count can *fall* while work rises,
+and has (58 → 59 → 56 across three readings whose turn count grew by a third). Turns are the
+honest denominator. State a session count only as a rough scale figure, never as a delta.
+
 **Separate building from using.** Long agentic build sessions cost an order of magnitude
 more than routine use, and they are a phase rather than a steady state. When a few sessions
 dominate the total, say so plainly — a subscription decision made from a build week will

@@ -89,8 +89,8 @@ disagreement is exactly where things get dropped. Open here. Never open with
 **2. What it is.** A context layer plus a skill library, versioned in git, that
 turns a general-purpose coding agent into a personal assistant — with the vault
 itself as the substrate instead of a database. Show the real artifacts: the
-six-line root `CLAUDE.md` stub, the `_AI/` tree, the fact that orchestration is
-prose in `skills/personal-assistant/SKILL.md` and that there is no runtime, no
+root `CLAUDE.md` stub, the `_AI/` tree, the fact that orchestration is
+prose in `.claude/skills/personal-assistant/SKILL.md` and that there is no runtime, no
 state machine, no code. **Count the lines rather than quoting a number** — `wc -l`
 over the skill in front of you, live, is both more honest and a better beat than a
 figure read out of a document.

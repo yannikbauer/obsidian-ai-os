@@ -2,6 +2,11 @@
 name: retro
 description: >
   Turn a session into durable lessons and apply them to the OS itself. Trigger on "/retro", "run a retro", "what did we learn", "capture the lesson from this", "retrospective", or when a Stop hook reports teaching signals. Also runs the consolidation pass that promotes recurring lessons into always-on rules — "/retro consolidate", "promote the lessons", "prune the lessons ledger".
+# A retro reads this session and edits the OS. It has no business touching the user's
+# calendar, mail, tasks or the open internet, so the connector tools and the web tools
+# are left out rather than merely unused. The tool-facing skills cannot be pinned this
+# way: their MCP server names are per-install, so a shareable skill cannot name them.
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash, AskUserQuestion
 ---
 
 # Retro (the learning loop)
@@ -69,8 +74,8 @@ obvious, and anything phrased as "be more careful".
 | Kind | It is… | Destination | Gate |
 |---|---|---|---|
 | `tool-fact` | how an external tool really behaves | `integrations/<tool>.md` | apply now |
-| `workflow` | an ordered step that worked | the relevant `skills/<x>/SKILL.md` | apply now |
-| `rule` | a hard constraint that can be mechanised | a `harness/` hook **and a test** | apply now |
+| `workflow` | an ordered step that worked | the relevant `.claude/skills/<x>/SKILL.md` | apply now |
+| `rule` | a hard constraint that can be mechanised | a hook in `.claude/hooks/` **and a test** | apply now |
 | `disposition` | how to think or verify | `history/lessons.md` as `candidate` | **wait for a 2nd sighting** |
 
 Only dispositions compete for always-on `CLAUDE.md` tokens, so only dispositions wait.
@@ -112,7 +117,7 @@ time:
   brief in `docs/`, the presentation skill, and the three scripts that enumerate the
   tree — `install.sh` (does a new personal file need scaffolding?), `export.sh` (does a
   new folder ship, or is it deliberately left behind?), `publish.sh`. **Do not re-read
-  them.** Grep each for the vocabulary of what changed — a `harness/` change greps
+  them.** Grep each for the vocabulary of what changed — a `.claude/hooks/` change greps
   `hook`, `gate`, `Stop`; a new skill greps the skills list and the file tree.
 - **The roadmap needs a sharper signal than grep**, because its staleness does not share
   vocabulary with the change. An item still sitting in an active tier after quietly
@@ -165,7 +170,7 @@ what earns always-on tokens.
    Set status `promoted` and record the destination.
 2. **Retire single sightings:** a `candidate` with one sighting older than a quarter did
    not recur. Propose `retired`. It was a one-off, and the ledger said so honestly.
-3. **Re-check what is already promoted:** if a `harness/` hook now enforces a promoted
+3. **Re-check what is already promoted:** if a hook in `.claude/hooks/` now enforces a promoted
    rule, propose removing the prose. #26's finding applies to this loop too — a rule in
    a hook needs no words in `CLAUDE.md`.
 4. **Report `CLAUDE.md`'s line count before and after.** Always. That number is the only
@@ -175,7 +180,7 @@ Same gate as extraction: propose diffs, wait, apply, commit named paths.
 
 ## The Stop hook
 
-`harness/hooks/suggest-retro.sh` scores each session on mechanical signals and, above
+`.claude/hooks/suggest-retro.sh` scores each session on mechanical signals and, above
 threshold, asks whether to run a retro — **once per session, and only asks.** When it
 fires, put the question to the user in one line and accept the answer. Do not run a
 retro because the hook fired; do not raise it again if they decline.

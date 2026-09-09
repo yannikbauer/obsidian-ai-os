@@ -153,7 +153,7 @@ command -v rsync >/dev/null || { echo "! rsync not found" >&2; exit 1; }
 # It already had: tools/ ships (it holds the scripts skills call by path) but was
 # missing here, so a tools-only change reached the public repo with an empty
 # summary. Same class of bug as ledger L008, one layer up.
-EXPORTED_PATHS="CLAUDE.md README.md LICENSE NOTICE CONTRIBUTING.md .gitignore VERSION skills harness tools templates setup"
+EXPORTED_PATHS="CLAUDE.md README.md LICENSE NOTICE CONTRIBUTING.md .gitignore VERSION tools templates setup tests .claude"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

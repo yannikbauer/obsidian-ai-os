@@ -25,7 +25,8 @@ fi
 mkdir -p "$TARGET"
 
 # --- copy the SHAREABLE set (everything generic) ----------------------------
-# Included: framework CLAUDE.md, skills/, templates/, setup/, README, CONTRIBUTING, ignore files.
+# Included: framework CLAUDE.md, .claude/ (settings, hooks, skills), tests/, tools/,
+#           templates/, setup/, README, CONTRIBUTING, ignore files.
 # Excluded: me.md, maps/, integrations/, history/, tmp/, databases/ (all personal).
 # This is an allowlist — a new personal folder is excluded by default, not by rule.
 cp    "$AI_DIR/CLAUDE.md"      "$TARGET/CLAUDE.md"
@@ -54,8 +55,13 @@ if [ -f "$AI_DIR/.github/FUNDING.yml" ]; then
   mkdir -p "$TARGET/.github"
   cp "$AI_DIR/.github/FUNDING.yml" "$TARGET/.github/FUNDING.yml"
 fi
-cp -R "$AI_DIR/skills"        "$TARGET/skills"
-cp -R "$AI_DIR/harness"       "$TARGET/harness"
+# tests/ ships beside the hooks it exercises: a fork that cannot run the suite cannot
+# tell a working gate from a dead one.
+cp -R "$AI_DIR/tests"         "$TARGET/tests"
+# .claude/ ships for its ignore rule above all: it is the directory other programs write
+# into, and a fork without that rule commits their droppings on its first push. cp -R
+# carries the dotfile; the fresh `git add` below then honours it.
+cp -R "$AI_DIR/.claude"       "$TARGET/.claude"
 # tools/ ships: skills call these scripts by path, so a shareable skill whose helper
 # stays behind is a skill that is broken on arrival. Caught 2026-09-05 — an allowlist
 # excludes a new folder by default, which is the safe failure for personal data and

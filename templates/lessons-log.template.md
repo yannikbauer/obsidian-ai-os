@@ -30,12 +30,12 @@ is a re-read and a judgment call, and the quarterly prune would delete the evide
 | Kind | Destination | Gate |
 |---|---|---|
 | `tool-fact` | `integrations/<tool>.md` | applied immediately |
-| `workflow` | the relevant `skills/<x>/SKILL.md` | applied immediately |
-| `rule` | a `harness/` hook **and a test** | applied immediately |
+| `workflow` | the relevant `.claude/skills/<x>/SKILL.md` | applied immediately |
+| `rule` | a hook in `.claude/hooks/` **and a test** | applied immediately |
 | `disposition` | stays here as `candidate` | needs a **second sighting** |
 
 Only dispositions compete for always-on `CLAUDE.md` tokens, so only dispositions wait.
-A rule that can be mechanised belongs in `harness/`, not in prose.
+A rule that can be mechanised belongs in `.claude/hooks/`, not in prose.
 
 ## Statuses
 

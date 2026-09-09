@@ -17,12 +17,9 @@ path=$(field '.tool_input.file_path')
 sid=$(field '.session_id')
 [ -n "$path" ] && [ -n "$sid" ] || exit 0
 
-# CLAUDE_PROJECT_DIR is the authority on where the project root is; the script's own
-# location (<vault>/_AI/harness/hooks/) is only the fallback for when it is unset.
-# Deriving from the location FIRST looks more robust and is wrong: it ignores the one
-# signal the harness actually provides, and pins the hook to the tree it was copied from.
-VAULT="${CLAUDE_PROJECT_DIR:-}"
-[ -n "$VAULT" ] || VAULT="$(cd "$(dirname "$0")/../../.." 2>/dev/null && pwd)"
+# Resolved once in lib.sh, with the same order of authority this hook used to spell out
+# for itself: the harness's signal first, the install's own location only as a fallback.
+VAULT="$VAULT_DIR"
 [ -n "$VAULT" ] || exit 0
 
 case "$path" in

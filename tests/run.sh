@@ -4,7 +4,8 @@
 #
 # The malformed-input cases are not optional. These hooks run on every tool call in
 # the vault, and that case decides whether a bad day is a bug or an outage.
-HOOKS="$(cd "$(dirname "$0")/.." && pwd)"
+# tests/ sits beside .claude/, so HOOKS is a sibling hop rather than a parent one.
+HOOKS="$(cd "$(dirname "$0")/../.claude" && pwd)"
 FAIL=0
 
 expect() { # expect <want-exit> <script> <json>
@@ -36,9 +37,9 @@ expect 0 hooks/guard-vault-write.sh ''
 # defaults (no config file) and a config file that replaces them. Run each against
 # a temporary _AI root so the result does not depend on this machine's own config.
 ZTMP=$(mktemp -d)
-mkdir -p "$ZTMP/_AI/harness/hooks" "$ZTMP/_AI/config"
-cp "$HOOKS/hooks/guard-vault-write.sh" "$HOOKS/hooks/lib.sh" "$ZTMP/_AI/harness/hooks/"
-ZHOOK="$ZTMP/_AI/harness/hooks/guard-vault-write.sh"
+mkdir -p "$ZTMP/_AI/.claude/hooks" "$ZTMP/_AI/config"
+cp "$HOOKS/hooks/guard-vault-write.sh" "$HOOKS/hooks/lib.sh" "$ZTMP/_AI/.claude/hooks/"
+ZHOOK="$ZTMP/_AI/.claude/hooks/guard-vault-write.sh"
 
 zexpect() { # zexpect <want-exit> <path> <label>
   printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"'"$2"'","content":"x"}}' \
@@ -66,10 +67,10 @@ rm -rf "$ZTMP"
 # Everything below would have passed silently before the matcher was widened,
 # which is the entire point of the item: the gate was watching a tool name.
 MTMP=$(mktemp -d)
-mkdir -p "$MTMP/_AI/harness/hooks" "$MTMP/_AI/config" "$MTMP/Archive" "$MTMP/Notes"
-cp "$HOOKS/hooks/guard-vault-write.sh" "$HOOKS/hooks/lib.sh" "$MTMP/_AI/harness/hooks/"
+mkdir -p "$MTMP/_AI/.claude/hooks" "$MTMP/_AI/config" "$MTMP/Archive" "$MTMP/Notes"
+cp "$HOOKS/hooks/guard-vault-write.sh" "$HOOKS/hooks/lib.sh" "$MTMP/_AI/.claude/hooks/"
 printf '%s\n' '*/Archive/*' > "$MTMP/_AI/config/readonly-zones.local"
-MHOOK="$MTMP/_AI/harness/hooks/guard-vault-write.sh"
+MHOOK="$MTMP/_AI/.claude/hooks/guard-vault-write.sh"
 printf '# Goals\n\n```tasks\nnot done\n```\n' > "$MTMP/Notes/goals.md"
 printf '# Plain\n\njust prose\n' > "$MTMP/Notes/plain.md"
 
@@ -120,10 +121,10 @@ rm -rf "$MTMP"
 # checks only for absence passes when the hook does not exist at all (L: negative
 # tests must assert shape).
 BTMP=$(mktemp -d)
-mkdir -p "$BTMP/_AI/harness/hooks" "$BTMP/_AI/config"
-cp "$HOOKS/hooks/guard-bash-vault.sh" "$HOOKS/hooks/lib.sh" "$BTMP/_AI/harness/hooks/"
+mkdir -p "$BTMP/_AI/.claude/hooks" "$BTMP/_AI/config"
+cp "$HOOKS/hooks/guard-bash-vault.sh" "$HOOKS/hooks/lib.sh" "$BTMP/_AI/.claude/hooks/"
 printf '%s\n' '*/Archive/*' '*/copilot/*' > "$BTMP/_AI/config/readonly-zones.local"
-BHOOK="$BTMP/_AI/harness/hooks/guard-bash-vault.sh"
+BHOOK="$BTMP/_AI/.claude/hooks/guard-bash-vault.sh"
 
 bexpect() { # bexpect <ask|quiet> <command> <label>
   out=$(printf '%s' "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":$(printf '%s' "$2" | /usr/bin/jq -Rs .)}}" \
@@ -220,9 +221,9 @@ rm -rf "$LTMP"
 # did exactly that, twice (a scratchpad file 2026-09-05, two ~/.claude/ memory
 # files 2026-09-07) before anyone fixed it rather than working around it.
 WTMP=$(mktemp -d)
-mkdir -p "$WTMP/_AI/harness/hooks" "$WTMP/_AI/tmp"
-cp "$HOOKS/hooks/trace-write.sh" "$HOOKS/hooks/lib.sh" "$WTMP/_AI/harness/hooks/"
-WHOOK="$WTMP/_AI/harness/hooks/trace-write.sh"
+mkdir -p "$WTMP/_AI/.claude/hooks" "$WTMP/_AI/tmp"
+cp "$HOOKS/hooks/trace-write.sh" "$HOOKS/hooks/lib.sh" "$WTMP/_AI/.claude/hooks/"
+WHOOK="$WTMP/_AI/.claude/hooks/trace-write.sh"
 
 wtrace() { # wtrace <path> — returns the trace file's line count for that path
   printf '%s' "{\"session_id\":\"S\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":$(printf '%s' "$1" | /usr/bin/jq -Rs .)}}" \
@@ -254,11 +255,11 @@ rm -rf "$WTMP"
 # a file that SHIPS would put the owner's document tree in the public export. The leak
 # check catches that pattern, but a fixture that only passes because another gate stops it
 # is a fixture written wrong.
-KTMP=$(mktemp -d); mkdir -p "$KTMP/_AI/harness/hooks" "$KTMP/_AI/config"
-cp "$HOOKS/hooks/guard-clickup.sh" "$HOOKS/hooks/lib.sh" "$KTMP/_AI/harness/hooks/"
+KTMP=$(mktemp -d); mkdir -p "$KTMP/_AI/.claude/hooks" "$KTMP/_AI/config"
+cp "$HOOKS/hooks/guard-clickup.sh" "$HOOKS/hooks/lib.sh" "$KTMP/_AI/.claude/hooks/"
 printf '# fixture allowlist\nPAGE-ALLOWED\n' > "$KTMP/_AI/config/clickup-replace-allow.local"
 kexpect() { # kexpect <want-exit> <json> <label>
-  printf '%s' "$2" | CLAUDE_PROJECT_DIR="$KTMP" "$KTMP/_AI/harness/hooks/guard-clickup.sh" >/dev/null 2>&1
+  printf '%s' "$2" | CLAUDE_PROJECT_DIR="$KTMP" "$KTMP/_AI/.claude/hooks/guard-clickup.sh" >/dev/null 2>&1
   kgot=$?
   if [ "$kgot" -eq "$1" ]; then echo "  ok   guard-clickup: $3"
   else echo "  FAIL guard-clickup: $3 — wanted exit $1, got $kgot" >&2; FAIL=1; fi
@@ -291,11 +292,17 @@ expect 0 hooks/guard-mail.sh 'not json'
 
 # --- trace-write ---
 # Not an exit-code assertion: this hook is judged by what it writes.
+# The hooks run from a COPY inside the sandbox. AIOS_DIR comes from a hook's own
+# location, not from CLAUDE_PROJECT_DIR, so a hook invoked from the real tree would
+# write its trace into the real tree — which is the point of that resolution order,
+# and the reason a test of it has to install itself somewhere first.
 TMPD=$(mktemp -d); export CLAUDE_PROJECT_DIR="$TMPD"
-mkdir -p "$TMPD/_AI/tmp"
+mkdir -p "$TMPD/_AI/tmp" "$TMPD/_AI/.claude/hooks"
+cp "$HOOKS/hooks/trace-write.sh" "$HOOKS/hooks/lib.sh" "$TMPD/_AI/.claude/hooks/"
+TWHOOK="$TMPD/_AI/.claude/hooks/trace-write.sh"
 
 printf '%s' '{"session_id":"s1","tool_name":"Write","tool_input":{"file_path":"'"$TMPD"'/Notes/a.md"}}' \
-  | "$HOOKS/hooks/trace-write.sh"
+  | "$TWHOOK"
 if grep -q 'Notes/a.md' "$TMPD/_AI/tmp/writes-s1.log" 2>/dev/null; then
   echo "  ok   trace-write records a vault note"
 else
@@ -303,7 +310,7 @@ else
 fi
 
 printf '%s' '{"session_id":"s1","tool_name":"Write","tool_input":{"file_path":"'"$TMPD"'/_AI/x.md"}}' \
-  | "$HOOKS/hooks/trace-write.sh"
+  | "$TWHOOK"
 # Assert the log's actual shape, not just the absence of a string: a bare "does not
 # contain" passes vacuously when the hook is missing and writes nothing at all.
 lines=$(wc -l < "$TMPD/_AI/tmp/writes-s1.log" 2>/dev/null | tr -d ' ')
@@ -313,34 +320,60 @@ else
   echo "  FAIL expected exactly 1 logged line and no _AI/ path; got ${lines:-0}" >&2; FAIL=1
 fi
 
-printf 'not json' | "$HOOKS/hooks/trace-write.sh"
+printf 'not json' | "$TWHOOK"
 [ $? -eq 0 ] && echo "  ok   trace-write fails open on bad input" || { echo "  FAIL bad input did not exit 0" >&2; FAIL=1; }
+
+# --- $AIOS_VAULT_DIR outranks $CLAUDE_PROJECT_DIR ---------------------------
+# The seam a second vault, or a session started from inside the OS, would use. An
+# override nothing exercises is not a seam, it is a comment — so point the two
+# variables at DIFFERENT trees and assert which one decides what counts as a note.
+OTMP=$(mktemp -d); OTHER=$(mktemp -d)
+mkdir -p "$OTMP/_AI/tmp" "$OTMP/_AI/.claude/hooks"
+cp "$HOOKS/hooks/trace-write.sh" "$HOOKS/hooks/lib.sh" "$OTMP/_AI/.claude/hooks/"
+OHOOK="$OTMP/_AI/.claude/hooks/trace-write.sh"
+printf '%s' '{"session_id":"s2","tool_name":"Write","tool_input":{"file_path":"'"$OTHER"'/Notes/b.md"}}' \
+  | env CLAUDE_PROJECT_DIR="$OTMP" AIOS_VAULT_DIR="$OTHER" "$OHOOK"
+if grep -q 'Notes/b.md' "$OTMP/_AI/tmp/writes-s2.log" 2>/dev/null; then
+  echo "  ok   AIOS_VAULT_DIR overrides CLAUDE_PROJECT_DIR for vault membership"
+else
+  echo "  FAIL AIOS_VAULT_DIR did not override CLAUDE_PROJECT_DIR" >&2; FAIL=1
+fi
+printf '%s' '{"session_id":"s3","tool_name":"Write","tool_input":{"file_path":"'"$OTMP"'/Notes/c.md"}}' \
+  | env CLAUDE_PROJECT_DIR="$OTMP" AIOS_VAULT_DIR="$OTHER" "$OHOOK"
+if [ -f "$OTMP/_AI/tmp/writes-s3.log" ]; then
+  echo "  FAIL a path outside the overridden vault was traced as a note" >&2; FAIL=1
+else
+  echo "  ok   a path under CLAUDE_PROJECT_DIR alone is not a note once overridden"
+fi
+rm -rf "$OTMP" "$OTHER"
 
 rm -rf "$TMPD"; unset CLAUDE_PROJECT_DIR
 
 # --- check-file-log ---
 # Order matters: block, then loop-guard release, then pass-once-logged.
 TMPD=$(mktemp -d); export CLAUDE_PROJECT_DIR="$TMPD"
-mkdir -p "$TMPD/_AI/tmp" "$TMPD/_AI/history"
+mkdir -p "$TMPD/_AI/tmp" "$TMPD/_AI/history" "$TMPD/_AI/.claude/hooks"
+cp "$HOOKS/hooks/check-file-log.sh" "$HOOKS/hooks/lib.sh" "$TMPD/_AI/.claude/hooks/"
+CFHOOK="$TMPD/_AI/.claude/hooks/check-file-log.sh"
 printf '# File Modification Log\n' > "$TMPD/_AI/history/file-log.md"
 printf '2026-09-04\tWrite\t%s/Notes/unlogged.md\n' "$TMPD" > "$TMPD/_AI/tmp/writes-s9.log"
 STOPIN='{"session_id":"s9","hook_event_name":"Stop"}'
 
-printf '%s' "$STOPIN" | "$HOOKS/hooks/check-file-log.sh" >/dev/null 2>&1
+printf '%s' "$STOPIN" | "$CFHOOK" >/dev/null 2>&1
 [ $? -eq 2 ] && echo "  ok   check-file-log blocks on an unlogged write" \
              || { echo "  FAIL expected exit 2 on an unlogged write" >&2; FAIL=1; }
 
-printf '%s' "$STOPIN" | "$HOOKS/hooks/check-file-log.sh" >/dev/null 2>&1
+printf '%s' "$STOPIN" | "$CFHOOK" >/dev/null 2>&1
 [ $? -eq 0 ] && echo "  ok   check-file-log loop guard releases on the 2nd Stop" \
              || { echo "  FAIL blocked twice — this can wedge a session" >&2; FAIL=1; }
 
 rm -f "$TMPD/_AI/tmp/.filelog-blocked-s9"
 printf -- '- 2026-09-04 12:00  [edit]  Notes/unlogged.md  — reason\n' >> "$TMPD/_AI/history/file-log.md"
-printf '%s' "$STOPIN" | "$HOOKS/hooks/check-file-log.sh" >/dev/null 2>&1
+printf '%s' "$STOPIN" | "$CFHOOK" >/dev/null 2>&1
 [ $? -eq 0 ] && echo "  ok   check-file-log passes once the write is logged" \
              || { echo "  FAIL expected exit 0 once logged" >&2; FAIL=1; }
 
-printf 'not json' | "$HOOKS/hooks/check-file-log.sh" >/dev/null 2>&1
+printf 'not json' | "$CFHOOK" >/dev/null 2>&1
 [ $? -eq 0 ] && echo "  ok   check-file-log fails open on bad input" \
              || { echo "  FAIL bad input did not exit 0" >&2; FAIL=1; }
 
@@ -350,7 +383,7 @@ rm -rf "$TMPD"; unset CLAUDE_PROJECT_DIR
 # Asserted against a fixture with hand-computed totals, never against the live corpus:
 # the arithmetic is what needs pinning, and real numbers drift as sessions accrue.
 ROOT="$(cd "$HOOKS/.." && pwd)"
-USAGE_JSON=$("$ROOT/tools/usage.sh" --dir "$HOOKS/tests/fixtures/usage" --json 2>/dev/null)
+USAGE_JSON=$("$ROOT/tools/usage.sh" --dir "$HOOKS/../tests/fixtures/usage" --json 2>/dev/null)
 check() { # check <jq-path> <want>
   got=$(printf '%s' "$USAGE_JSON" | /usr/bin/jq -r "$1" 2>/dev/null)
   if [ "$got" = "$2" ]; then echo "  ok   usage $1 = $2"
@@ -367,7 +400,7 @@ check .peak_1h 1160
 check .peak_5h 1160
 check .peak_24h 1440
 
-FILTERED=$("$ROOT/tools/usage.sh" --dir "$HOOKS/tests/fixtures/usage" --project proj-b --json 2>/dev/null)
+FILTERED=$("$ROOT/tools/usage.sh" --dir "$HOOKS/../tests/fixtures/usage" --project proj-b --json 2>/dev/null)
 got=$(printf '%s' "$FILTERED" | /usr/bin/jq -r .output 2>/dev/null)
 [ "$got" = "25" ] && echo "  ok   usage --project filters to one project" \
                   || { echo "  FAIL --project filter: wanted output 25, got ${got:-<none>}" >&2; FAIL=1; }
@@ -378,10 +411,10 @@ got=$(printf '%s' "$FILTERED" | /usr/bin/jq -r .output 2>/dev/null)
 # nudge the user turns off, and then the learning loop has no trigger at all. Hence
 # the below-threshold and loop-guard cases carry as much weight as the firing one.
 RTMP=$(mktemp -d)
-mkdir -p "$RTMP/_AI/harness/hooks" "$RTMP/_AI/tools" "$RTMP/_AI/tmp"
-cp "$HOOKS/hooks/suggest-retro.sh" "$HOOKS/hooks/lib.sh" "$RTMP/_AI/harness/hooks/"
+mkdir -p "$RTMP/_AI/.claude/hooks" "$RTMP/_AI/tools" "$RTMP/_AI/tmp"
+cp "$HOOKS/hooks/suggest-retro.sh" "$HOOKS/hooks/lib.sh" "$RTMP/_AI/.claude/hooks/"
 cp "$HOOKS/../tools/session-digest.sh" "$RTMP/_AI/tools/"
-RHOOK="$RTMP/_AI/harness/hooks/suggest-retro.sh"
+RHOOK="$RTMP/_AI/.claude/hooks/suggest-retro.sh"
 
 # Synthetic transcripts, not real ones: a fixture that depends on this machine's
 # session history is a test that passes until someone prunes ~/.claude.
@@ -425,10 +458,10 @@ rexpect 2 d1 "$QUIET" '' "a single hook denial is enough on a quiet session"
 # Coupling worth a test: if deny() stops logging, the strongest retro signal goes
 # silent and nothing else notices.
 DTMP=$(mktemp -d)
-mkdir -p "$DTMP/_AI/harness/hooks"
-cp "$HOOKS/hooks/guard-vault-write.sh" "$HOOKS/hooks/lib.sh" "$DTMP/_AI/harness/hooks/"
+mkdir -p "$DTMP/_AI/.claude/hooks"
+cp "$HOOKS/hooks/guard-vault-write.sh" "$HOOKS/hooks/lib.sh" "$DTMP/_AI/.claude/hooks/"
 printf '%s' '{"session_id":"dsid","tool_name":"Write","tool_input":{"file_path":"/v/Archive/x.md","content":"x"}}' \
-  | CLAUDE_PROJECT_DIR="$DTMP" "$DTMP/_AI/harness/hooks/guard-vault-write.sh" >/dev/null 2>&1
+  | CLAUDE_PROJECT_DIR="$DTMP" "$DTMP/_AI/.claude/hooks/guard-vault-write.sh" >/dev/null 2>&1
 if [ -s "$DTMP/_AI/tmp/denies-dsid.log" ]; then echo "  ok   deny() writes tmp/denies-<sid>.log"
 else echo "  FAIL deny() left no trace for suggest-retro to read" >&2; FAIL=1; fi
 
@@ -560,7 +593,7 @@ fi
 # matches command syntax and can tell neither a temp tree from this one nor a quoted
 # command from a real one.
 CVTMP=$(mktemp -d)
-cp -R "$HOOKS/../tools" "$HOOKS/../skills" "$HOOKS/../setup" "$HOOKS/../harness" \
+cp -R "$HOOKS/../tools" "$HOOKS/../setup" "$HOOKS/../.claude" \
       "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$CVTMP/" 2>/dev/null
 if ( cd "$CVTMP" && ./tools/check-coverage.sh >/dev/null 2>&1 ); then
   echo "  ok   check-coverage passes on a complete tree"
@@ -577,6 +610,139 @@ else
   echo "  ok   check-coverage catches a skill missing from the README tree"
 fi
 
+# --- check-coverage: the vault-root glue must be in the README tree ------------
+# The glue install.sh writes at the vault root is the part of the layout least likely
+# to be documented, because it is the part a fresh clone does not contain. Its own
+# scratch copy, so the deletion above cannot mask the result.
+CVROOT=$(mktemp -d)
+cp -R "$HOOKS/../tools" "$HOOKS/../setup" "$HOOKS/../.claude" \
+      "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$CVROOT/" 2>/dev/null
+grep -v '\.claudeignore' "$CVROOT/README.md" > "$CVROOT/R2" && mv "$CVROOT/R2" "$CVROOT/README.md"
+cvrout=$(cd "$CVROOT" && sh tools/check-coverage.sh 2>&1)
+case "$cvrout" in
+  *"vault-root file written by install.sh is missing from README tree"*)
+    echo "  ok   check-coverage catches vault-root glue missing from the README tree" ;;
+  *) echo "  FAIL check-coverage missed an undocumented vault-root file" >&2; FAIL=1 ;;
+esac
+
+# --- check-coverage: a skill's name must match its directory -------------------
+# A skill is addressed by directory, so a mismatched `name:` does not error — it just
+# never gets picked, which is indistinguishable from the model choosing not to use it.
+CVSK=$(mktemp -d)
+cp -R "$HOOKS/../tools" "$HOOKS/../setup" "$HOOKS/../.claude" \
+      "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$CVSK/" 2>/dev/null
+sed 's/^name: retro$/name: retrospective/' "$CVSK/.claude/skills/retro/SKILL.md" > "$CVSK/S2" \
+  && mv "$CVSK/S2" "$CVSK/.claude/skills/retro/SKILL.md"
+cvsout=$(cd "$CVSK" && sh tools/check-coverage.sh 2>&1)
+case "$cvsout" in
+  *"does not match its directory"*)
+    echo "  ok   check-coverage catches a skill whose name and directory disagree" ;;
+  *) echo "  FAIL check-coverage missed a skill name/directory mismatch" >&2; FAIL=1 ;;
+esac
+
+# ...and an empty description, which silences a skill just as completely.
+CVSD=$(mktemp -d)
+mkdir -p "$CVSD/.claude/skills/ghost" "$CVSD/tools" "$CVSD/.claude" "$CVSD/setup"
+cp "$HOOKS/../tools/check-coverage.sh" "$CVSD/tools/"
+: > "$CVSD/.claude/settings.json"; : > "$CVSD/setup/export.sh"; : > "$CVSD/setup/install.sh"
+printf -- '---\nname: ghost\ndescription:\n---\n' > "$CVSD/.claude/skills/ghost/SKILL.md"
+cvdout=$(cd "$CVSD" && sh tools/check-coverage.sh 2>&1)
+case "$cvdout" in
+  *"skill description is empty"*)
+    echo "  ok   check-coverage catches an empty skill description" ;;
+  *) echo "  FAIL check-coverage missed an empty skill description" >&2; FAIL=1 ;;
+esac
+
+# --- a registered hook whose file is gone (L019) ------------------------------
+# The failure this catches is silent by construction: hooks fail OPEN, so a settings file
+# that points at a moved script looks fully wired and enforces nothing. Check 1 only proves
+# the hook is NAMED there, which a stale path satisfies perfectly.
+CC6=$(mktemp -d)
+mkdir -p "$CC6/.claude/hooks" "$CC6/tools" "$CC6/setup"
+cp "$HOOKS/../tools/check-coverage.sh" "$CC6/tools/"
+: > "$CC6/setup/export.sh"; : > "$CC6/setup/install.sh"
+printf '%s\n' '{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/_AI/.claude/hooks/ghost.sh\""}]}]}}' \
+  > "$CC6/.claude/settings.json"
+case "$(cd "$CC6" && sh tools/check-coverage.sh 2>&1)" in
+  *"registers a hook whose file does not exist"*)
+    echo "  ok   check-coverage catches a registered hook with no file" ;;
+  *) echo "  FAIL check-coverage missed a hook path that resolves to nothing" >&2; FAIL=1 ;;
+esac
+# ...and goes quiet once the file is there, or it is a check that can only ever be red.
+: > "$CC6/.claude/hooks/ghost.sh"
+case "$(cd "$CC6" && sh tools/check-coverage.sh 2>&1)" in
+  *"registers a hook whose file does not exist"*)
+    echo "  FAIL check-coverage still reports a hook whose file now exists" >&2; FAIL=1 ;;
+  *) echo "  ok   check-coverage accepts a registered hook that resolves" ;;
+esac
+rm -rf "$CC6"
+
+# --- .claude/ is a whitelist, and the walk closes its quiet side --------------
+# The one directory other programs write into. The ignore rule admits SHAPES, so a new
+# hook needs nobody to remember this file exists, and check-coverage walks the directory
+# so a new KIND of file cannot go missing instead. Both halves are asserted here,
+# against the REAL .gitignore rather than a copy of its intent.
+CLTMP=$(mktemp -d)
+mkdir -p "$CLTMP/.claude/hooks" "$CLTMP/.claude/sessions" "$CLTMP/tools" "$CLTMP/.claude" "$CLTMP/setup"
+cp "$HOOKS/../.claude/.gitignore" "$CLTMP/.claude/.gitignore"
+cp "$HOOKS/../tools/check-coverage.sh" "$CLTMP/tools/"
+: > "$CLTMP/.claude/settings.json"; : > "$CLTMP/setup/export.sh"; : > "$CLTMP/setup/install.sh"
+printf '# R\n\n```\n_AI/\n```\n' > "$CLTMP/README.md"
+( cd "$CLTMP" && git init -q >/dev/null 2>&1 \
+  && git add .claude/.gitignore .claude/settings.json >/dev/null 2>&1 )
+: > "$CLTMP/.claude/settings.local.json"
+: > "$CLTMP/.claude/sessions/s.json"
+: > "$CLTMP/.claude/hooks/new-gate.sh"
+
+if ( cd "$CLTMP" && git check-ignore -q .claude/settings.local.json ); then
+  echo "  ok   .claude: a per-machine settings file is ignored"
+else
+  echo "  FAIL .claude: settings.local.json would be committed" >&2; FAIL=1
+fi
+if ( cd "$CLTMP" && git check-ignore -q .claude/sessions/s.json ); then
+  echo "  ok   .claude: a plugin's session state is ignored"
+else
+  echo "  FAIL .claude: sessions/ would be committed" >&2; FAIL=1
+fi
+if ( cd "$CLTMP" && git check-ignore -q .claude/hooks/new-gate.sh ); then
+  echo "  FAIL .claude: a new hook is ignored, so it would never ship" >&2; FAIL=1
+else
+  echo "  ok   .claude: a new hook is admitted by shape, not by name"
+fi
+
+clout=$(cd "$CLTMP" && sh tools/check-coverage.sh 2>&1)
+case "$clout" in
+  *"neither tracked nor declared LOCAL_ONLY: .claude/hooks/new-gate.sh"*)
+    echo "  ok   check-coverage catches an untracked file under .claude/" ;;
+  *) echo "  FAIL check-coverage missed an untracked file under .claude/" >&2; FAIL=1 ;;
+esac
+# The declared droppings must NOT be reported, or the check cries wolf on every session
+# and gets switched off — the L006 failure, inside a check written to prevent L008.
+case "$clout" in
+  *"settings.local.json"*|*"sessions/s.json"*)
+    echo "  FAIL check-coverage reports a declared LOCAL_ONLY file" >&2; FAIL=1 ;;
+  *) echo "  ok   check-coverage stays quiet about declared LOCAL_ONLY files" ;;
+esac
+# A foreign skill is the case skills/ being linked as a WHOLE directory makes possible,
+# so the walk must name it as a skill rather than as generic bookkeeping.
+mkdir -p "$CLTMP/.claude/skills/foreign"
+: > "$CLTMP/.claude/skills/foreign/SKILL.md"
+case "$(cd "$CLTMP" && sh tools/check-coverage.sh 2>&1)" in
+  *"a skill under .claude/skills/ that this repo does not track"*)
+    echo "  ok   check-coverage names an untracked skill as a skill" ;;
+  *) echo "  FAIL check-coverage did not identify an untracked skill" >&2; FAIL=1 ;;
+esac
+rm -rf "$CLTMP/.claude/skills"
+
+( cd "$CLTMP" && git add .claude/hooks/new-gate.sh >/dev/null 2>&1 )
+clout2=$(cd "$CLTMP" && sh tools/check-coverage.sh 2>&1)
+case "$clout2" in
+  *"neither tracked nor declared LOCAL_ONLY"*)
+    echo "  FAIL check-coverage still complains once the file is tracked" >&2; FAIL=1 ;;
+  *) echo "  ok   check-coverage goes quiet once the file is tracked" ;;
+esac
+rm -rf "$CLTMP"
+
 
 
 # --- check-coverage: the two sets that drifted on 2026-09-07 -------------------
@@ -586,10 +752,10 @@ fi
 # own integrations/ or *.local: holding a generic, exported README to a personal file list
 # would force it to name the user's tools, which is the leak the architecture prevents (L004).
 CC3=$(mktemp -d)
-mkdir -p "$CC3/templates/integrations" "$CC3/harness" "$CC3/tools" "$CC3/setup"
+mkdir -p "$CC3/templates/integrations" "$CC3/.claude" "$CC3/tools" "$CC3/setup"
 cp "$HOOKS/../tools/check-coverage.sh" "$CC3/tools/"
 : > "$CC3/templates/integrations/todoist.template.md"
-: > "$CC3/harness/settings.json"; : > "$CC3/setup/export.sh"; : > "$CC3/setup/install.sh"
+: > "$CC3/.claude/settings.json"; : > "$CC3/setup/export.sh"; : > "$CC3/setup/install.sh"
 printf '# R\n\n```\n_AI/\n├── integrations/\n```\n' > "$CC3/README.md"
 cc3out=$(cd "$CC3" && sh tools/check-coverage.sh 2>&1)
 case "$cc3out" in
@@ -614,9 +780,9 @@ rm -rf "$CC3"
 # append-only record and docs/ is dated, so a number there was true when written and
 # flagging it would be the rule that fires on legitimate work (L006).
 CC5=$(mktemp -d)
-mkdir -p "$CC5/harness" "$CC5/tools" "$CC5/setup"
+mkdir -p "$CC5/.claude" "$CC5/tools" "$CC5/setup"
 cp "$HOOKS/../tools/check-coverage.sh" "$CC5/tools/"
-: > "$CC5/harness/settings.json"; : > "$CC5/setup/export.sh"; : > "$CC5/setup/install.sh"
+: > "$CC5/.claude/settings.json"; : > "$CC5/setup/export.sh"; : > "$CC5/setup/install.sh"
 printf '# f\n\nSee rule 5 above.\n' > "$CC5/CLAUDE.md"
 case "$(cd "$CC5" && sh tools/check-coverage.sh 2>&1)" in
   *"cites a rule by ordinal"*) echo "  ok   check-coverage catches a rule cited by ordinal" ;;
@@ -750,7 +916,7 @@ pgrep_ok 'git push -q origin HEAD "refs/tags/v$RELEASE"' "commit and tag are pus
 n=$(grep -c 'EXPORTED_PATHS' "$PS")
 [ "$n" -ge 3 ] && echo "  ok   publish.sh: one exported-path list, used by both ranges" \
   || { echo "  FAIL publish.sh: exported paths are enumerated in more than one place" >&2; FAIL=1; }
-for pth in tools setup skills harness templates VERSION; do
+for pth in tools setup templates VERSION tests .claude; do
   grep -E '^EXPORTED_PATHS=' "$PS" | grep -Fq " $pth" \
     || { echo "  FAIL publish.sh: EXPORTED_PATHS omits '$pth', which ships" >&2; FAIL=1; }
 done

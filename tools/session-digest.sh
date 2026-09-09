@@ -122,7 +122,7 @@ tool_calls() {
 # rewrite an _AI/ path. The Bash clause requires a mutating verb, so reading a file
 # with cat does not count as writing it. The redirect clause excludes `&` as well as `|`:
 # `2>&1` is a `>`, and without that exclusion every stderr-redirecting READ of an _AI/ path
-# scored as a write (found 2026-09-07; fixture in harness/tests/run.sh).
+# scored as a write (found 2026-09-07; fixture in tests/run.sh).
 framework_writes() {
   /usr/bin/jq -r 'select(.type=="assistant") | .message.content[]?
     | select(.type=="tool_use")

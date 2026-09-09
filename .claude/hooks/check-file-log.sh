@@ -20,7 +20,7 @@ while IFS="$TAB" read -r _ts _tool path; do
   # Match on the vault-relative path, not the basename: two notes can share a
   # filename in different folders, and basename matching would pass one off as
   # the other's log entry — a false pass in a safety check.
-  rel=${path#"${CLAUDE_PROJECT_DIR:-}/"}
+  rel=${path#"$VAULT_DIR/"}
   grep -Fq "$rel" "$log" 2>/dev/null || missing="$missing  $rel
 "
 done < "$trace"

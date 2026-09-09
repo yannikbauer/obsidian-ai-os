@@ -1,0 +1,42 @@
+# This directory is the one place in the repo that OTHER PROGRAMS write into.
+# Claude Code drops per-machine permission overrides here the first time you approve
+# something permanently; plugins drop settings and session state beside them. None of
+# that is the OS, and some of it names your machine, your paths, or your session ids.
+#
+# So the rule is a WHITELIST, not a blacklist. A blacklist has to predict what the next
+# tool will leave behind, and the cost of guessing wrong is committing it — to a repo
+# whose whole point is being forkable and published from. A whitelist's cost of guessing
+# wrong is the opposite: something legitimate is silently NOT committed, and works
+# locally forever (ledger L008 — the safe default for personal data is the silent
+# default for generic code).
+#
+# Both halves are covered. The patterns below admit the SHAPES the OS ships, so a new
+# hook or a new skill is tracked without anyone remembering to come back here. And
+# tools/check-coverage.sh walks this directory and refuses anything that is neither
+# tracked nor declared on the LOCAL_ONLY line, so a new KIND of file forces a decision
+# instead of vanishing.
+
+# Ignore everything...
+*
+# ...but descend into directories, or nothing below them could be re-admitted.
+!*/
+
+# ...then re-admit exactly what ships.
+!.gitignore
+!README.md
+!settings.json
+!hooks/*.sh
+!skills/**
+
+# ...except OS cruft, which `!skills/**` would otherwise re-admit. A later pattern wins,
+# so this has to sit AFTER the whitelist, not with the ignores at the top.
+.DS_Store
+
+# Ignored on purpose. check-coverage.sh reads this line: a file under .claude/ that is
+# neither tracked nor covered here is reported, rather than quietly left behind.
+#
+# It lists only what EVERY install sees. A GUI wrapper or editor plugin drops its own
+# settings and session files here under its own name; add that name when it appears. Being
+# reported once is not the mechanism failing, it is the mechanism asking, and answering it
+# by name is cheaper than a pattern that would also swallow the next thing.
+# LOCAL_ONLY: settings.local.json sessions .DS_Store

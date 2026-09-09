@@ -8,7 +8,7 @@ An AI operating system, not just a task manager. The default "app" running on it
 
 - **Identity** — who the user is and how to work with them (`me.md`)
 - **Navigation** — how the vault and external tools are organized (`maps/`, `integrations/`)
-- **Capabilities** — skills for each tool and for cross-tool workflows (`skills/`)
+- **Capabilities** — skills for each tool and for cross-tool workflows (`.claude/skills/`)
 - **Memory** — a log of what the AI has changed (`history/file-log.md`), continuity between sessions (`history/session-log.md`), a ledger of what it has been taught (`history/lessons.md`) and, later, a search index (`databases/`)
 
 ## Layered design
@@ -19,7 +19,7 @@ The system separates **generic** from **personal** at every layer. This is what 
 |-------|-----------------------------|------------------------------|
 | Instructions | this file (`CLAUDE.md`) | `me.md` |
 | Navigation | — | `maps/vault-map.md` |
-| Tool logic | `skills/` | `integrations/*.md` |
+| Tool logic | `.claude/skills/` | `integrations/*.md` |
 
 **Tools are optional.** A tool is configured iff `integrations/<tool>.md` exists; that file declares its `**Role:**` (`task-system`, `calendar`, `mail`). Skills resolve roles at point of use and degrade gracefully when a role is unfilled — never describe a tool the user has not configured. The `notes` role is the substrate: it is always present and backed by `maps/vault-map.md`, so it needs no integration file to *function*. It may still have one — an optional API layer over the notes tool. Read its absence differently from the other roles: no file means **no API**, never no notes.
 
@@ -38,7 +38,7 @@ Skills contain **generic logic** ("how to operate a task-system's tasks and docs
    correction, a near-miss caught by a hook, a check that failed to catch what it
    should have — run the `retro` skill. It records the lesson in `history/lessons.md`
    and applies it where it belongs: a fact about a tool goes to `integrations/`, a
-   workflow step to a skill, a mechanisable rule to a `harness/` hook. **Only a
+   workflow step to a skill, a mechanisable rule to a hook in `.claude/hooks/`. **Only a
    disposition that has recurred earns a rule in this file**, because everything here
    is loaded on every session and the token budget is what makes the OS cheap. The
    ledger is not auto-imported; like `session-log.md`, it is read when needed.
@@ -77,7 +77,7 @@ tree more than one session writes to. A hook firing means a rule was about to be
 read the reason and take the alternative it names, rather than working around it. The
 hooks are a floor, not a substitute for the human review gate — and they fail *open*,
 so a hook that cannot run silently stops protecting anything. `install.sh` checks for
-its `jq` dependency for that reason. See `harness/README.md`.
+its `jq` dependency for that reason. See `.claude/README.md`.
 
 **A gate can only see the route it matches — so route note writes where it can see them.**
 Vault writes go through the notes API (`mcp__*__vault_*`), and fall back to `Write`/`Edit`
@@ -97,4 +97,4 @@ human should not have to do from memory.
 
 ## Growing the OS
 
-This system is designed to evolve. New skills go in `skills/`. New orientation docs (people-map, project-map) go in `maps/`. New tool integrations go in `integrations/`. Update `me.md` as the user's context changes. Keep the generic/personal separation so the OS stays shareable via `setup/export.sh`.
+This system is designed to evolve. New skills go in `.claude/skills/`. New orientation docs (people-map, project-map) go in `maps/`. New tool integrations go in `integrations/`. Update `me.md` as the user's context changes. Keep the generic/personal separation so the OS stays shareable via `setup/export.sh`.

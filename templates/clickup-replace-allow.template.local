@@ -1,6 +1,6 @@
 # clickup-replace-allow.local — task-system doc pages the AI MAY rewrite in full.
 #
-# Read by harness/hooks/guard-clickup.sh. One page id per line; blank lines and
+# Read by .claude/hooks/guard-clickup.sh. One page id per line; blank lines and
 # #-comments ignored.
 #
 # EMPTY BY DEFAULT, AND THAT IS THE SAFE STATE. With no ids listed, every whole-page

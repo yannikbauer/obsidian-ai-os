@@ -5,7 +5,7 @@
 # Idempotent. Run from anywhere; it locates itself. It:
 #   1. Creates the vault-root CLAUDE.md stub (imports the _AI framework)
 #   2. Creates the vault-root .claudeignore
-#   3. Creates the .claude/skills -> _AI/skills symlink (native skill discovery)
+#   3. Creates (or repoints) the .claude/ symlinks into _AI/.claude/
 #   4. Scaffolds missing personal files from templates/ (never overwrites):
 #      me.md, maps/, history/, docs/, tmp/, and the .local config files
 #      (leak-patterns, leak-allow, readonly-zones, publish), plus an empty
@@ -37,7 +37,7 @@ if [ "$(basename "$AI_DIR")" != "_AI" ]; then
 !   <your-obsidian-vault>/_AI
 !
 ! The framework hardcodes that name: the vault-root CLAUDE.md stub imports
-! @_AI/CLAUDE.md, and .claude/skills symlinks to ../_AI/skills. Installing from
+! @_AI/CLAUDE.md, and .claude/skills symlinks to ../_AI/.claude/skills. Installing from
 ! a differently-named directory produces a broken symlink and a stub pointing at
 ! files that do not exist.
 !
@@ -73,6 +73,17 @@ else
   echo "• created CLAUDE.md (root stub)"
 fi
 
+# --- 1b. root AGENTS.md stub -------------------------------------------------
+# The same pointer, in the runtime-neutral file Codex, Cursor, Gemini CLI and others
+# look for. A POINTER, never a copy: two files describing one framework is two
+# frameworks, and only one of them gets edited.
+if [ -e "$VAULT_DIR/AGENTS.md" ]; then
+  echo "• AGENTS.md exists — leaving as is"
+else
+  cp "$TPL/AGENTS.root.template.md" "$VAULT_DIR/AGENTS.md"
+  echo "• created AGENTS.md (root stub, runtime-neutral)"
+fi
+
 # --- 2. root .claudeignore ---------------------------------------------------
 if [ -e "$VAULT_DIR/.claudeignore" ]; then
   echo "• .claudeignore exists — leaving as is"
@@ -81,31 +92,39 @@ else
   echo "• created .claudeignore"
 fi
 
-# --- 3. skills symlink -------------------------------------------------------
+# --- 3. the two symlinks into the repo ---------------------------------------
+# Both point at _AI/.claude/, so the skills Claude discovers and the settings it runs
+# on are the ones under version control.
+#
+# RETARGETING IS THE POINT, not an afterthought. Until 2026-09-09 these lived at
+# _AI/skills and _AI/harness/settings.json. An upgrade that found an existing symlink
+# and said "leaving as is" would leave a fork pointing at directories that no longer
+# exist -- a dangling link resolves to nothing, and hooks that cannot be found fail
+# OPEN, so the gates would simply stop enforcing without a word. So a symlink whose
+# target has moved is repointed; only a real file or directory is left for a human.
 mkdir -p "$VAULT_DIR/.claude"
-LINK="$VAULT_DIR/.claude/skills"
-if [ -L "$LINK" ]; then
-  echo "• .claude/skills symlink exists — leaving as is"
-elif [ -e "$LINK" ]; then
-  echo "! .claude/skills exists and is NOT a symlink — skipping (resolve manually)"
-else
-  # relative link keeps it portable if the vault moves
-  ln -s "../_AI/skills" "$LINK"
-  echo "• linked .claude/skills -> _AI/skills"
-fi
 
-# The harness's own config, same pattern: the real file is tracked in _AI/, the
-# vault root only points at it. Without this the OS is version-controlled but the
-# settings it runs on are not.
-SLINK="$VAULT_DIR/.claude/settings.json"
-if [ -L "$SLINK" ]; then
-  echo "• .claude/settings.json symlink exists — leaving as is"
-elif [ -e "$SLINK" ]; then
-  echo "! .claude/settings.json exists and is NOT a symlink — skipping (resolve manually)"
-else
-  ln -s "../_AI/harness/settings.json" "$SLINK"
-  echo "• linked .claude/settings.json -> _AI/harness/settings.json"
-fi
+link_into_repo () {  # $1 = path under .claude/, $2 = relative target, $3 = label
+  _l="$VAULT_DIR/.claude/$1"
+  if [ -L "$_l" ]; then
+    _cur=$(readlink "$_l")
+    if [ "$_cur" = "$2" ]; then
+      echo "• .claude/$1 symlink is current — leaving as is"
+    else
+      ln -sfn "$2" "$_l"
+      echo "• repointed .claude/$1: $_cur -> $2"
+    fi
+  elif [ -e "$_l" ]; then
+    echo "! .claude/$1 exists and is NOT a symlink — skipping (resolve manually)"
+  else
+    # relative link keeps it portable if the vault moves
+    ln -s "$2" "$_l"
+    echo "• linked .claude/$1 -> $2  ($3)"
+  fi
+}
+
+link_into_repo skills        "../_AI/.claude/skills"        "native skill discovery"
+link_into_repo settings.json "../_AI/.claude/settings.json" "model pin + hooks"
 
 # --- 4. scaffold missing personal files from templates -----------------------
 scaffold () {  # $1 = template path (relative to _AI), $2 = target (relative to _AI)
@@ -175,14 +194,23 @@ else
 fi
 
 if [ -e "$VAULT_DIR/.claude/settings.json" ]; then
-  echo "  ok   harness settings symlink resolves"
+  echo "  ok   settings symlink resolves"
 else
-  echo "  FAIL harness settings symlink does not resolve: $VAULT_DIR/.claude/settings.json" >&2
+  echo "  FAIL settings symlink does not resolve: $VAULT_DIR/.claude/settings.json" >&2
   FAILED=1
 fi
 
 # Hooks fail open by design, so a missing jq is silent: the gates simply stop
 # enforcing. Say so at install time rather than letting it be discovered later.
+# A missing AGENTS.md is silent in exactly the situation it exists for: another runtime
+# opens the vault, finds no entry point, and improvises against a system it cannot see.
+if [ -f "$VAULT_DIR/AGENTS.md" ]; then
+  echo "  ok   AGENTS.md present (entry point for non-Claude runtimes)"
+else
+  echo "  FAIL AGENTS.md missing: $VAULT_DIR/AGENTS.md" >&2
+  FAILED=1
+fi
+
 if [ -x /usr/bin/jq ]; then
   echo "  ok   jq present at /usr/bin/jq"
 else

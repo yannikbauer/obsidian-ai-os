@@ -13,7 +13,7 @@
 . "$(dirname "$0")/lib.sh"
 
 tool=$(field '.tool_name')
-VAULT="${CLAUDE_PROJECT_DIR:-.}"
+VAULT="$VAULT_DIR"
 
 # Vault-relative MCP paths are normalised to absolute so that config/readonly-zones.local
 # keeps its single documented form (*/Folder/*) and needs no change for this route.
@@ -32,8 +32,7 @@ path=$(abspath "$path")
 # _AI/config/readonly-zones.local holds one shell glob per line and REPLACES the defaults
 # below when present. It lives at the _AI root, alongside the other .local files,
 # so the export allowlist leaves it behind.
-AI_ROOT="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd)"
-ZONES="$AI_ROOT/config/readonly-zones.local"
+ZONES="$AIOS_DIR/config/readonly-zones.local"
 
 zone_of() { # zone_of <path> -- prints the matching pattern, or nothing
   _p=$1

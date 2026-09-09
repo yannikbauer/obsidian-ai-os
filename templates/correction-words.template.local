@@ -1,6 +1,6 @@
 # correction-words.local — what counts as the user correcting the AI.
 #
-# Read by tools/session-digest.sh, which feeds harness/hooks/suggest-retro.sh: a
+# Read by tools/session-digest.sh, which feeds .claude/hooks/suggest-retro.sh: a
 # session with corrections in it is a session that probably taught something.
 #
 # One extended-regex alternative per line. Blank lines and #-comments are ignored.

@@ -6,82 +6,160 @@ Designed to be **generic and shareable**: the framework contains no personal dat
 
 ## Layout
 
-Three labels matter throughout: **generic** ships in the shared export, **personal** never
-does, and **gitignored** is not tracked at all.
+### Why the files sit where they do
+
+Three constraints pull against each other, and the layout is what satisfies all three at
+once:
+
+1. **Claude Code treats the project root as its world.** `CLAUDE.md`, `.claude/`, the
+   hooks and the permission boundary are all anchored there. For the OS to work on your
+   notes, that root has to be the vault.
+2. **Git must not cover your notes.** Hundreds of personal notes and a folder of binaries
+   do not belong in a repo built to be forked and published, and one blanket `git add` in
+   a vault-wide repo would leak them irreversibly.
+3. **The framework has to stay forkable as one self-contained repo**, so nothing it needs
+   may live outside it.
+
+So the repo lives at `<vault>/_AI` and *is* the whole OS, while the few things Claude Code
+insists on finding at the vault root are glue pointing straight back into it: a stub that
+`@`-imports the framework, its runtime-neutral twin, an ignore list, and two symlinks into
+the repo. `install.sh` writes that glue
+and then verifies it resolves, which is why those entries are created rather than
+committed. The vault root stays plain-local, and the OS and the harness it runs on are
+version-controlled together.
+
+### Why two symlinks and not one
+
+The vault root's `.claude/` could have been a single symlink to `_AI/.claude/`. It is two
+links to individual entries instead, and the reason is who else writes there.
+
+That directory is **shared**. Claude Code drops a per-machine permission file into it the
+first time you approve something permanently; a GUI wrapper drops its own settings and
+session state; an agent or slash command you create lands there too. Linking the directory
+as a whole pulls every one of those into this repo, where an ignore rule has to hold them
+back. Linking only the entries the OS owns leaves the rest outside the repo *by
+construction* — the same reason the vault itself is not a git repo.
+
+The cost is one link per thing the OS wants to version: adding `agents/` or `commands/`
+later is one more `link_into_repo` call in `install.sh`. Two things follow from that. A
+real directory of the same name already sitting at the vault root blocks the link, and
+`install.sh` says so rather than replacing it. And anything you create at the vault root
+under a name the OS does not link is simply not version-controlled.
+
+`skills/` is the exception neither shape fixes. It is linked as a whole directory, so a
+skill that any tool installs into this project lands inside this repo. That is what
+`.claude/.gitignore` and the `.claude/` walk in `check-coverage.sh` are for: the ignore
+rule admits only the shapes the OS ships, and the walk reports anything under `.claude/`
+that is neither tracked nor declared.
+
+### Why skills and integrations are separate
+
+A skill holds **generic logic** — how to operate a task system, not which lists you use.
+Everything specific to you lives in `integrations/<tool>.md`, one file per tool, and those
+files never ship. Two things fall out of that split, and the second is the one people miss:
+
+- **It is what makes the skills shareable at all.** A skill with your list ids, folder
+  names and doc urls baked in is personal data wearing a capability's clothes. Strip it
+  and there is nothing generic left to publish.
+- **Token economy.** A skill reads its integration file *at the point of use*, so a
+  session that never touches your task system never loads your task-system setup.
+  Hardcoded, every skill would be longer and would carry your whole configuration into
+  every session that so much as mentions it.
+
+The same file is also the **on-switch**: a tool is configured if and only if
+`integrations/<tool>.md` exists. A skill that resolves a role and finds no file degrades
+and says so, rather than describing a tool you do not have. `CLAUDE.md` states the rule
+under *Layered design*; the tree below is the shape it produces on disk.
+
+The right-hand column answers one question for every entry: where it comes from, and who
+gets to see it. **generic** ships in the shared export, **personal** never does,
+**gitignored** is not tracked at all, and **created by install.sh** marks the glue that is
+written at install time instead of committed.
 
 ```
-_AI/                        the git repo — git lives here, not at the vault root
-├── CLAUDE.md               the framework / "soul"                     generic
-├── me.md                   who you are, how to work with you          personal
-├── VERSION                 what a fork has; 0.0.0 until first release  generic
-├── LICENSE                 Apache-2.0 — without it, nobody may reuse  generic
-├── NOTICE                  attribution that redistributions must keep  generic
-├── CONTRIBUTING.md         the generic/personal rule, DCO, licence grant generic
+<vault>/                    your Obsidian vault — deliberately NOT a git repo
 │
-├── config/                 the knobs — one folder, one lifecycle      personal · never exported
-│   ├── leak-patterns.local     identifiers the export scans for
-│   ├── leak-allow.local        literals that are deliberately public
-│   ├── publish.local           where to publish, and as whom
-│   ├── readonly-zones.local    folders the AI must never write into
-│   ├── correction-words.local  what counts as you correcting the AI
-│   ├── clickup-replace-allow.local  doc pages the AI may rewrite whole
-│   └── README.md               what reads each knob, and how each one degrades
+├── CLAUDE.md               stub; @-imports CLAUDE.md, me.md, vault-map.md      created by install.sh
+├── AGENTS.md               the same pointer, for non-Claude runtimes           created by install.sh
+├── .claudeignore           what Claude Code must not index                     created by install.sh
+├── .claude/
+│   ├── skills        -> ../_AI/.claude/skills          native skill discovery  created by install.sh
+│   └── settings.json -> ../_AI/.claude/settings.json   model pin + hooks       created by install.sh
 │
-├── maps/                   orientation — structure, not content       personal
-│   ├── vault-map.md          how your vault is organised
-│   └── workflow-map.md       which system is authoritative for what
-├── integrations/           a file's existence IS the on-switch        personal
-│   ├── calendar.md           role: calendar
-│   ├── clickup.md            role: task-system
-│   ├── gmail.md              role: mail
-│   └── obsidian.md           role: notes — OPTIONAL; absent means no API, not no notes
-│
-├── skills/                 capabilities, loaded on demand             generic
-│   ├── personal-assistant/   the orchestrator — cross-tool workflows
-│   ├── obsidian/             notes: the always-present substrate
-│   ├── calendar/  clickup/  mail/    one per tool role
-│   ├── setup/                configure and health-check integrations
-│   ├── retro/                turn a session into lessons, and apply them
-│   ├── usage/                what this account actually spends
-│   └── demo/                 present the OS to someone else
-│
-├── harness/                the harness's own configuration            generic
-│   ├── settings.json         model pin + hooks; symlinked from .claude/
-│   ├── hooks/                deny gates, one ask gate, write trace, two Stop hooks
-│   ├── tests/run.sh          fixtures — every hook and gate, including malformed input
-│   └── tests/fixtures/       recorded transcripts the usage fixtures read
-│
-├── tools/                  read-only scripts skills call by path        generic
-│   ├── session-digest.sh     reduce a transcript to what a retro needs
-│   ├── check-coverage.sh     the enumerations that must match reality
-│   └── usage.sh              token usage, read from Claude Code's own logs
-│
-├── history/                append-forever, fully tracked              personal
-│   ├── file-log.md           AI changes to vault notes outside _AI/
-│   ├── session-log.md        continuity between sessions
-│   ├── lessons.md            the learning ledger — what it has been taught
-│   └── usage-baseline.md     what this account normally spends, to compare against
-│
-├── docs/                   thinking, not machinery                    personal · never exported
-│   ├── roadmap.md            living index of intent
-│   ├── artifacts/            published write-ups, with their sources
-│   └── working-notes/        one file per in-flight roadmap item
-│
-├── templates/              skeletons for scaffolding and sharing      generic
-│   └── integrations/         one per tool role
-├── setup/                                                             generic
-│   ├── install.sh            root glue, scaffolding, and a self-check
-│   ├── export.sh             clean shareable copy + leak check
-│   ├── leak-check.sh         the scan itself — refuses to run if it cannot find _AI
-│   ├── version.sh            reads and bumps VERSION; used only when releasing
-│   └── publish.sh            same as export, but preserves public git history
-│
-├── .github/workflows/                                                 personal · never exported
-│   ├── verify.yml            gates + public diff on every push; publishes nothing
-│   └── publish.yml           manual trigger; the only thing that goes public
-│
-├── tmp/                    snapshots, scratch, hook traces            gitignored
-└── databases/              future search index                        gitignored
+└── _AI/                    the git repo — everything below here is the OS
+    ├── CLAUDE.md               the framework / "soul"                          generic
+    ├── me.md                   who you are, how to work with you               personal
+    ├── VERSION                 the version a fork has; nothing else states it  generic
+    ├── LICENSE                 Apache-2.0 — without it, nobody may reuse       generic
+    ├── NOTICE                  attribution that redistributions must keep      generic
+    ├── CONTRIBUTING.md         the generic/personal rule, DCO, licence grant   generic
+    │
+    ├── config/                 the knobs — one folder, one lifecycle           personal · never exported
+    │   ├── leak-patterns.local     identifiers the export scans for
+    │   ├── leak-allow.local        literals that are deliberately public
+    │   ├── publish.local           where to publish, and as whom
+    │   ├── readonly-zones.local    folders the AI must never write into
+    │   ├── correction-words.local  what counts as you correcting the AI
+    │   ├── clickup-replace-allow.local  doc pages the AI may rewrite whole
+    │   └── README.md               what reads each knob, and how each one degrades
+    │
+    ├── maps/                   orientation — structure, not content            personal
+    │   ├── vault-map.md          how your vault is organised
+    │   └── workflow-map.md       which system is authoritative for what
+    ├── integrations/           a file's existence IS the on-switch             personal
+    │   ├── calendar.md           role: calendar
+    │   ├── clickup.md            role: task-system
+    │   ├── gmail.md              role: mail
+    │   └── obsidian.md           role: notes — OPTIONAL; absent means no API, not no notes
+    │
+    ├── .claude/                everything Claude Code reads                    generic
+    │   ├── settings.json         model pin + hooks; symlinked from the vault root
+    │   ├── hooks/                deny gates, one ask gate, write trace, two Stop hooks
+    │   ├── .gitignore            a whitelist — other programs write here too
+    │   └── skills/               capabilities, loaded on demand
+    │       ├── personal-assistant/   the orchestrator — cross-tool workflows
+    │       ├── obsidian/             notes: the always-present substrate
+    │       ├── calendar/  clickup/  mail/    one per tool role
+    │       ├── setup/                configure and health-check integrations
+    │       ├── retro/                turn a session into lessons, and apply them
+    │       ├── usage/                what this account actually spends
+    │       └── demo/                 present the OS to someone else
+    │
+    ├── tools/                  read-only scripts skills call by path           generic
+    │   ├── session-digest.sh     reduce a transcript to what a retro needs
+    │   ├── check-coverage.sh     the enumerations that must match reality
+    │   └── usage.sh              token usage, read from Claude Code's own logs
+    │
+    ├── tests/                  fixtures for every hook, gate and script        generic
+    │   ├── run.sh                every hook and gate, including malformed input
+    │   └── fixtures/             recorded transcripts the usage fixtures read
+    │
+    ├── history/                append-forever, fully tracked                   personal
+    │   ├── file-log.md           AI changes to vault notes outside _AI/
+    │   ├── session-log.md        continuity between sessions
+    │   ├── lessons.md            the learning ledger — what it has been taught
+    │   └── usage-baseline.md     what this account normally spends, to compare against
+    │
+    ├── docs/                   thinking, not machinery                         personal · never exported
+    │   ├── roadmap.md            living index of intent
+    │   ├── artifacts/            published write-ups, with their sources
+    │   └── working-notes/        one file per in-flight roadmap item
+    │
+    ├── templates/              skeletons for scaffolding and sharing           generic
+    │   └── integrations/         one per tool role
+    ├── setup/                                                                  generic
+    │   ├── install.sh            root glue, scaffolding, and a self-check
+    │   ├── export.sh             clean shareable copy + leak check
+    │   ├── leak-check.sh         the scan itself — refuses to run if it cannot find _AI
+    │   ├── version.sh            reads and bumps VERSION; used only when releasing
+    │   └── publish.sh            same as export, but preserves public git history
+    │
+    ├── .github/workflows/                                                      personal · never exported
+    │   ├── verify.yml            gates + public diff on every push; publishes nothing
+    │   └── publish.yml           manual trigger; the only thing that goes public
+    │
+    ├── tmp/                    snapshots, scratch, hook traces                 gitignored
+    └── databases/              future search index                             gitignored
 ```
 
 ### What `install.sh` creates
@@ -109,20 +187,9 @@ safe to re-run:
 `databases/` is not created: it is a placeholder for a search index that does not
 exist yet.
 
-`install.sh` also materialises four things at the **vault root**, outside this repo — which is
-why they are created rather than committed:
-
-```
-<vault>/
-├── CLAUDE.md               stub that @-imports CLAUDE.md, me.md, vault-map.md
-├── .claudeignore           index exclusions
-└── .claude/
-    ├── skills    -> ../_AI/skills             native skill discovery
-    └── settings.json -> ../_AI/harness/settings.json   model pin + hooks
-```
-
-Both symlinks point *into* the repo, so the OS and the harness it runs on are
-version-controlled together while the vault root stays plain-local.
+The same run also writes the four **vault-root** entries marked in the tree above. They are
+the glue described under [Why the files sit where they do](#why-the-files-sit-where-they-do),
+and both symlinks point *into* this repo, so nothing of substance lives outside it.
 
 ## What it can't do yet
 
@@ -208,7 +275,7 @@ Mentioned in passing but **not** required: Dataview, Calendar, and an unlinked-f
 
 **Step 0 — put the repo inside your vault, named `_AI`.** This is not optional:
 the vault-root stub imports `@_AI/CLAUDE.md` and the skills symlink points at
-`../_AI/skills`, so the directory name is load-bearing. `install.sh` refuses to
+`../_AI/.claude/skills`, so the directory name is load-bearing. `install.sh` refuses to
 run from anywhere else rather than leaving you with broken links.
 
 ```bash
@@ -295,16 +362,16 @@ A tool is configured if and only if `_AI/integrations/<tool>.md` exists. Delete 
 
 Packs come in two shapes, and picking the right one matters:
 
-- **Role-named packs** (`skills/calendar/`, `skills/mail/`) hold provider-agnostic logic for a role — they must work for *any* provider (Fastmail, Proton, Apple Calendar, Outlook, …) and must name no specific product, timezone, or language.
-- **Tool-named packs** (`skills/clickup/`) hold logic genuinely specific to one product's model — naming that product inside its own pack is correct.
+- **Role-named packs** (`.claude/skills/calendar/`, `.claude/skills/mail/`) hold provider-agnostic logic for a role — they must work for *any* provider (Fastmail, Proton, Apple Calendar, Outlook, …) and must name no specific product, timezone, or language.
+- **Tool-named packs** (`.claude/skills/clickup/`) hold logic genuinely specific to one product's model — naming that product inside its own pack is correct.
 
-**A new provider for a role you already have (e.g. you already use `calendar` but switch from Google Calendar to Fastmail) usually needs only a new `integrations/<tool>.md` file, not a new skill** — the existing role-named pack already handles it generically. Only write a new `skills/<tool>/` pack when the tool's operating model doesn't fit an existing role, or the role itself has no pack yet.
+**A new provider for a role you already have (e.g. you already use `calendar` but switch from Google Calendar to Fastmail) usually needs only a new `integrations/<tool>.md` file, not a new skill** — the existing role-named pack already handles it generically. Only write a new `.claude/skills/<tool>/` pack when the tool's operating model doesn't fit an existing role, or the role itself has no pack yet.
 
 When you do need a new pack, it is three files:
 
 | File | Contents | Ships? |
 |------|----------|--------|
-| `skills/<tool>/SKILL.md` | generic "how to operate this tool" logic | yes |
+| `.claude/skills/<tool>/SKILL.md` | generic "how to operate this tool" logic | yes |
 | `templates/integrations/<tool>.template.md` | menu entry, placeholders only | yes |
 | `integrations/<tool>.md` | your IDs and conventions | never |
 
@@ -326,11 +393,12 @@ everywhere.
 
 ## Working on the OS
 
-- **Edit skills** in `_AI/skills/` — those are the real files; the `.claude/skills` symlink just exposes them. Commit changes to `_AI/`.
+- **Edit skills** in `_AI/.claude/skills/` — those are the real files; the `.claude/skills` symlink just exposes them. Commit changes to `_AI/`.
 - **Update your context** by editing `me.md`, `maps/vault-map.md` and `integrations/*.md` as things change. The `setup` skill can re-verify integration files against live APIs.
-- **Add a skill**: create `_AI/skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description`) plus instructions. It is discovered automatically through the symlink. Keep it under ~500 lines and push reference detail into files it points at.
+- **Add a skill**: create `_AI/.claude/skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description`) plus instructions. It is discovered automatically through the symlink. Keep it under ~500 lines and push reference detail into files it points at.
 - **Add a map**: new orientation docs (people-map, project-map) go in `_AI/maps/`, and if they should always load, get added to the root stub's `@import` list.
-- **Change a hook** in `_AI/harness/`, then run `sh harness/tests/run.sh`. Settings edits are picked up live — no restart. Write commands as `"\"${CLAUDE_PROJECT_DIR}/_AI/harness/hooks/x.sh\""`: braced *and* quoted, because an unquoted path containing a space fails silently.
+- **Change a hook** in `_AI/.claude/hooks/`, then run `sh tests/run.sh`. Settings edits are picked up live — no restart. Write commands as `"\"${CLAUDE_PROJECT_DIR}/_AI/.claude/hooks/x.sh\""`: braced *and* quoted, because an unquoted path containing a space fails silently.
+- **Share something new with Claude Code** — a project agent, a slash command — by putting it in `_AI/.claude/<thing>/` and adding one `link_into_repo` line to `install.sh`. Without the link it lives only at the vault root, outside git.
 - **Git lives in `_AI/`**, not the vault root. Run every git command from there.
 - **The AI logs its own changes to vault files outside `_AI/`** in `history/file-log.md`. Changes inside `_AI/` are covered by git history instead.
 
@@ -352,7 +420,7 @@ bash _AI/setup/publish.sh --dry-run        # see what would change publicly
 bash _AI/setup/publish.sh                  # export, diff, confirm, push
 ```
 
-Both copy only the generic parts — framework, skills, harness, templates, setup,
+Both copy only the generic parts — framework, `.claude/`, tests, templates, setup,
 LICENSE — via an **allowlist**, so a new personal folder is excluded by default
 rather than by remembering to exclude it.
 
@@ -417,7 +485,7 @@ Both run the same gates first:
 
 | Gate | Catches |
 |---|---|
-| `harness/tests/run.sh` | a broken hook — they fail *open*, so breakage is otherwise silent |
+| `tests/run.sh` | a broken hook — they fail *open*, so breakage is otherwise silent |
 | `actionlint` | a workflow that is itself broken — the thing that runs every other gate |
 | `export.sh` leak check | identifiers you listed in `config/leak-patterns.local` |
 | **gitleaks** | the generic classes you would not have predicted — API keys, tokens, private keys |

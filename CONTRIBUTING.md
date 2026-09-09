@@ -28,9 +28,9 @@ This decays silently, and it has done so repeatedly. Real examples caught in rev
 **Moved or reused text must be re-checked against its new home's constraints.** If you
 relocate a paragraph, read it again as though you had just written it there.
 
-There are exceptions, and they are deliberate rather than sloppy: files under `skills/` that
-are *named* for a tool may name that tool, and `harness/hooks/` may name the tool whose API
-it gates. Role-named files (`skills/calendar/`, `skills/mail/`) may not.
+There are exceptions, and they are deliberate rather than sloppy: files under `.claude/skills/` that
+are *named* for a tool may name that tool, and `.claude/hooks/` may name the tool whose API
+it gates. Role-named files (`.claude/skills/calendar/`, `.claude/skills/mail/`) may not.
 
 ## Sign-off (DCO)
 
@@ -76,7 +76,7 @@ forever. That is not something a later change can take back.
 
 ## Practical
 
-- **Run the test suite**: `sh harness/tests/run.sh` — every assertion must pass.
+- **Run the test suite**: `sh tests/run.sh` — every assertion must pass.
 - **Run the coverage check**: `sh tools/check-coverage.sh` — it enforces the enumerations
   that go stale silently (hooks registered, templates scaffolded, export coverage declared,
   no counts or rule-ordinals in prose).
