@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.0 — 2026-09-10
+
+- Record the v0.2.1 release
+- README: name the two .claude/ folders instead of the choice between links
+- publish.sh: a release now also becomes a GitHub Release
+
 ## v0.2.1 — 2026-09-09
 
 - Record the v0.2.0 release

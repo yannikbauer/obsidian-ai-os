@@ -946,6 +946,15 @@ for pth in tools setup templates VERSION tests .claude; do
 done
 echo "  ok   publish.sh: EXPORTED_PATHS covers every shipped path"
 
+# A pushed tag is not a Release: the repo page lists Release objects, and a tag alone
+# leaves it reading "N tags". The notes must be READ BACK from the changelog this run
+# wrote, never rebuilt, or the two say different things about the same version.
+pgrep_ok 'gh release create "v$RELEASE"' "a release cut here also becomes a GitHub Release"
+pgrep_ok '"$WORK/public/CHANGELOG.md" > "$WORK/release-notes.md"' "the release notes are the changelog entry, not a second rendering"
+# The commit and tag are already public by then, so a missing gh must not read as a
+# failed publish -- it must say how to finish by hand.
+pgrep_ok 'gh CLI not found' "a missing gh degrades to a warning, not a failure"
+
 # VERSION must actually reach the export, or the file names a version no fork can read.
 grep -Fq '$AI_DIR/VERSION' "$HOOKS/../setup/export.sh" \
   && echo "  ok   export.sh ships VERSION" \

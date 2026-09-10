@@ -428,6 +428,38 @@ else
   if [ -n "$RELEASE" ]; then
     printf '%s\n' "$RELEASE" > "$AI_DIR/VERSION"
     echo "Tagged v$RELEASE. _AI/VERSION is now $RELEASE -- commit it."
+
+    # A PUSHED TAG IS NOT A GITHUB RELEASE. A Release is a separate object, created
+    # through the API, carrying a title and notes; the repo page lists those under
+    # "Releases". With tags alone the page reads "N tags", which is the presentation of
+    # somewhere nobody ships from, not of a project with versions a fork can rely on.
+    #
+    # The notes are the changelog section this run just wrote, read back from the file
+    # rather than rebuilt -- one statement, one place, so the two cannot drift.
+    #
+    # Best-effort, and deliberately so: the commit and the tag are already public, so a
+    # missing `gh` or a token without release scope must not be reported as a failed
+    # publish. It prints how to finish by hand instead.
+    if command -v gh >/dev/null 2>&1; then
+      # index()==1 rather than a regex: a version is full of dots, and `.` in a pattern
+      # would match a character that is not there.
+      awk -v h="## v$RELEASE " '
+        index($0, h) == 1 { inside = 1; next }
+        inside && /^## /  { exit }
+        inside            { print }
+      ' "$WORK/public/CHANGELOG.md" > "$WORK/release-notes.md"
+      RELEASE_REPO="$(printf '%s' "$PUBLIC_REMOTE" | sed -e 's|.*github.com[:/]||' -e 's|\.git$||')"
+      if gh release create "v$RELEASE" --repo "$RELEASE_REPO" \
+           --title "v$RELEASE" --notes-file "$WORK/release-notes.md" >/dev/null 2>&1; then
+        echo "Created the GitHub Release for v$RELEASE."
+      else
+        echo "! The tag is pushed, but creating the GitHub Release failed." >&2
+        echo "! Finish it by hand: gh release create v$RELEASE --repo $RELEASE_REPO \\" >&2
+        echo "!   --notes-file <the CHANGELOG.md section for v$RELEASE>" >&2
+      fi
+    else
+      echo "! gh CLI not found: v$RELEASE is tagged but has no GitHub Release." >&2
+    fi
   fi
   sync_metadata
 fi
