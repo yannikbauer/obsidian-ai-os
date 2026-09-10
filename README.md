@@ -28,29 +28,41 @@ and then verifies it resolves, which is why those entries are created rather tha
 committed. The vault root stays plain-local, and the OS and the harness it runs on are
 version-controlled together.
 
-### Why two symlinks and not one
+### The two `.claude/` folders, and what links them
 
-The vault root's `.claude/` could have been a single symlink to `_AI/.claude/`. It is two
-links to individual entries instead, and the reason is who else writes there.
+There are two of them, and the tree below is confusing until you know why.
 
-That directory is **shared**. Claude Code drops a per-machine permission file into it the
-first time you approve something permanently; a GUI wrapper drops its own settings and
-session state; an agent or slash command you create lands there too. Linking the directory
-as a whole pulls every one of those into this repo, where an ignore rule has to hold them
-back. Linking only the entries the OS owns leaves the rest outside the repo *by
-construction* — the same reason the vault itself is not a git repo.
+Claude Code only ever looks for `.claude/` at the **project root**, which here is the vault.
+But everything that belongs in it — the skills, the hooks, the settings the OS runs on — has
+to live inside `_AI/`, or it is not version-controlled and cannot be shared. Those two
+requirements point at two different places, so the vault-root one holds nothing of its own.
+It holds symlinks into the repo, where the real files are:
 
-The cost is one link per thing the OS wants to version: adding `agents/` or `commands/`
-later is one more `link_into_repo` call in `install.sh`. Two things follow from that. A
-real directory of the same name already sitting at the vault root blocks the link, and
-`install.sh` says so rather than replacing it. And anything you create at the vault root
-under a name the OS does not link is simply not version-controlled.
+| At the vault root | points into the repo at | which holds |
+|---|---|---|
+| `.claude/skills` | `_AI/.claude/skills` | the skills Claude discovers |
+| `.claude/settings.json` | `_AI/.claude/settings.json` | the model pin and the hook registrations |
 
-`skills/` is the exception neither shape fixes. It is linked as a whole directory, so a
-skill that any tool installs into this project lands inside this repo. That is what
-`.claude/.gitignore` and the `.claude/` walk in `check-coverage.sh` are for: the ignore
-rule admits only the shapes the OS ships, and the walk reports anything under `.claude/`
-that is neither tracked nor declared.
+**Why two links, rather than one link to the whole folder.** Because that folder is shared,
+and the OS is not the only thing writing to it. Claude Code drops a per-machine permission
+file there the first time you approve something permanently. A GUI wrapper drops its own
+settings and session state. An agent or a slash command you write lands there too. Linking
+the folder as a whole would pull every one of those into this repo, where an ignore rule
+would have to hold them back — forever, and against tools nobody has written yet. Linking
+only the two entries the OS owns leaves the rest outside the repo *by construction*, which
+is the same reasoning that keeps the vault itself out of git.
+
+**What that costs.** One link per thing the OS wants to version: adding `agents/` or
+`commands/` later is one more `link_into_repo` call in `install.sh`. Two consequences follow.
+A real folder of that name already sitting at the vault root blocks the link, and
+`install.sh` says so rather than replacing anything you have. And whatever you create at the
+vault root under a name the OS does not link is simply not in git.
+
+**The exception, which neither arrangement fixes.** `skills/` is linked as a whole folder, so
+a skill that any tool installs into this project lands inside this repo. `.claude/.gitignore`
+and the `.claude/` walk in `check-coverage.sh` exist for exactly that: the ignore rule admits
+only the shapes the OS ships, and the walk reports anything under `.claude/` that is neither
+tracked nor deliberately declared.
 
 ### Why skills and integrations are separate
 
