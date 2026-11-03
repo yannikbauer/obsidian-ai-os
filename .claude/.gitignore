@@ -27,10 +27,23 @@
 !settings.json
 !hooks/*.sh
 !skills/**
+!agents/*.md
 
 # ...except OS cruft, which `!skills/**` would otherwise re-admit. A later pattern wins,
 # so this has to sit AFTER the whitelist, not with the ignores at the top.
 .DS_Store
+
+# ...and Obsidian Copilot's skills. Copilot (v4+) links its own skills into every agent's
+# native skill folder, and the vault's .claude/skills is a symlink to this one, so they
+# land here as absolute links into <vault>/copilot/skills/ (2026-10-02). Not the OS: some
+# are paid-only, one publishes. Same position rule as .DS_Store. export.sh strips any link
+# that gets past this, and leak-check.sh refuses one. Add a name when Copilot ships one.
+skills/copilot-*
+skills/json-canvas
+skills/obsidian-bases
+skills/obsidian-cli
+skills/obsidian-markdown
+skills/openartifacts-publish
 
 # Ignored on purpose. check-coverage.sh reads this line: a file under .claude/ that is
 # neither tracked nor covered here is reported, rather than quietly left behind.

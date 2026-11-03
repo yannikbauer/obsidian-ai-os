@@ -21,6 +21,7 @@
 #   ./publish.sh --yes              no confirmation prompt (CI)
 #   ./publish.sh --branch sync/main push to a branch instead, for review via PR
 #   ./publish.sh --version minor    cut a release: bump VERSION, tag, write CHANGELOG
+#   ./publish.sh --notes FILE       use FILE as the changelog entry and commit body
 #
 # A RELEASE is a separate act from a publish. Publishing syncs content; releasing
 # gives that content a name a fork can refer to. Interactive runs are asked once;
@@ -125,6 +126,7 @@ DRY_RUN=0
 ASSUME_YES=0
 BRANCH=""
 VERSION_ARG=""
+NOTES=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
@@ -141,12 +143,32 @@ while [ $# -gt 0 ]; do
       VERSION_ARG="$1"
       ;;
     --version=*) VERSION_ARG="${1#--version=}" ;;
+    --notes)
+      shift
+      [ $# -gt 0 ] || { echo "! --notes needs a file" >&2; exit 64; }
+      NOTES="$1"
+      ;;
+    --notes=*) NOTES="${1#--notes=}" ;;
     *) echo "! unknown argument: $1" >&2; exit 64 ;;
   esac
   shift
 done
 
 command -v rsync >/dev/null || { echo "! rsync not found" >&2; exit 1; }
+
+# Private commit subjects are written for the private repo: they name weeks, retros and
+# the user's own data. The leak check only catches the tokens it knows, so a subject
+# can be clean and still personal. --notes replaces them with text written for the
+# public, in both places they would otherwise land. It is leak-checked here, before
+# anything else runs, and a hit aborts: curated text has no plain fallback.
+if [ -n "$NOTES" ]; then
+  [ -s "$NOTES" ] || { echo "! --notes: $NOTES is missing or empty" >&2; exit 64; }
+  NOTES="$(cd "$(dirname "$NOTES")" && pwd)/$(basename "$NOTES")"  # the script cds later
+  if ! bash "$SCRIPT_DIR/leak-check.sh" "$NOTES" >/dev/null 2>&1; then
+    echo "! --notes: $NOTES carries a personal token. Aborting." >&2
+    exit 2
+  fi
+fi
 
 # The exported paths, as a git pathspec. Named once because it is used twice --
 # the public commit body and the changelog -- and the two must not drift apart.
@@ -233,7 +255,10 @@ LEVEL="${VERSION_ARG:-}"
 if [ -n "$BRANCH" ] && [ -n "$LEVEL" ]; then
   echo "  (--version ignored: --branch publishes a proposal, not a release)"
   LEVEL=""
-elif [ -z "$LEVEL" ] && [ -z "$BRANCH" ] && [ "$ASSUME_YES" -ne 1 ] && [ -r /dev/tty ]; then
+elif [ -z "$LEVEL" ] && [ -z "$BRANCH" ] && [ "$ASSUME_YES" -ne 1 ] \
+     && ( : </dev/tty ) 2>/dev/null; then
+  # Open /dev/tty to test it: `-r` passes in a shell with no controlling terminal (an
+  # agent, a cron job) and the read below then fails. Without a terminal, keep the version.
   CURRENT_V="$(bash "$SCRIPT_DIR/version.sh" current)"
   echo
   echo "Current version: $CURRENT_V"
@@ -285,6 +310,7 @@ if [ -n "$RELEASE" ]; then
                | sed -E 's/#([0-9]+)/item \1/g' | sed 's/^/- /')"
   fi
   [ -n "$ENTRIES" ] || ENTRIES="- Initial tagged release."
+  [ -z "$NOTES" ] || ENTRIES="$(cat "$NOTES")"
 
   # Commit subjects are metadata, so the export's leak check never saw them. The
   # commit-body path below may degrade to a plain message when one is dirty; this
@@ -375,6 +401,12 @@ if [ -n "$LAST_SRC" ] && (cd "$AI_DIR" && git cat-file -e "${LAST_SRC}^{commit}"
       echo "   the published FILES are unaffected, only this message)"
     fi
   fi
+fi
+
+if [ -n "$NOTES" ]; then
+  SUBJECT="Sync AI OS framework"
+  [ -n "$RELEASE" ] && SUBJECT="Release v$RELEASE"
+  BODY="$(cat "$NOTES")"
 fi
 
 # Source-commit is a trailer, not part of the subject, so the subject is free to

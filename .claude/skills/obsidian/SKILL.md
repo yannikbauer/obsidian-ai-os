@@ -29,7 +29,8 @@ So, in order: **the notes API if one is configured** (surgical, and it can check
 - **Respect wikilinks.** Notes reference each other with `[[Note Name]]` and `[[Note#Section]]`. Renaming a note or a linked heading can break links elsewhere — flag before doing it.
 - **Don't touch generated/query syntax.** Never edit Templater `<%* ... %>` blocks, live `\`\`\`tasks` query blocks, or `> [!Goals]-` callouts unless explicitly asked to change that logic.
 - **Edit surgically.** Change only the requested content; don't reformat or re-whitespace whole files.
-- **Log every change** to `_AI/history/file-log.md`.
+- **Log every change** to `_AI/history/file-log.md`. A move or rename is two lines, one for
+  the old path ("moved to …") and one for the new; the Stop check traces both.
 
 ## What you can do
 

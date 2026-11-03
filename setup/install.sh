@@ -125,6 +125,7 @@ link_into_repo () {  # $1 = path under .claude/, $2 = relative target, $3 = labe
 
 link_into_repo skills        "../_AI/.claude/skills"        "native skill discovery"
 link_into_repo settings.json "../_AI/.claude/settings.json" "model pin + hooks"
+link_into_repo agents        "../_AI/.claude/agents"        "native subagent discovery"
 
 # --- 4. scaffold missing personal files from templates -----------------------
 scaffold () {  # $1 = template path (relative to _AI), $2 = target (relative to _AI)

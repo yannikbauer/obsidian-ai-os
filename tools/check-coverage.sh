@@ -73,6 +73,9 @@ if [ -f README.md ]; then
     say "README has no fenced tree block to check the skills and tools against"
   else
     for d in .claude/skills/*/; do
+      # A symlinked skill is a plugin's, not the OS's (Obsidian Copilot links its own
+      # in here): gitignored, stripped from the export, so not the README's business.
+      [ -L "${d%/}" ] && continue
       n=$(basename "$d")
       printf '%s' "$tree" | grep -Fq "$n/" || say "skill missing from README tree: $n"
     done

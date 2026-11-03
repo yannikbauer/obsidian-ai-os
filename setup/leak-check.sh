@@ -111,6 +111,24 @@ else
 fi
 
 LEAKED=0
+
+# --- symlinks -----------------------------------------------------------------
+# A symlink's TARGET is metadata, not content: grep -r skips links, so a link whose
+# target is /Users/<name>/... passed the scan above while carrying the owner's
+# document tree into the tree (L003). And a link can never be correct in a
+# self-contained copy anyway: absolute, it points into one machine; relative, it
+# points outside the repo or duplicates a file. Obsidian Copilot started linking
+# its skills into .claude/skills on 2026-10-02, so this is a live route, not a
+# hypothetical. Relative paths only in the report, for the reason given above.
+if [ -d "$TARGET" ]; then
+  links="$( cd "$TARGET" && find . -type l -not -path './.git/*' 2>/dev/null || true )"
+  if [ -n "$links" ]; then
+    echo "  LEAK: symlinks (their targets are invisible to the content scan):" >&2
+    printf '%s\n' "$links" >&2
+    LEAKED=1
+  fi
+fi
+
 for p in "${PATTERNS[@]}"; do
   hits="$(scan "$p" | strip_allowed | grep -E -- "$p" || true)"
   if [ -n "$hits" ]; then

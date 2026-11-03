@@ -105,6 +105,30 @@ cp -R "$AI_DIR/setup"         "$TARGET/setup"
 # strip any stray junk
 find "$TARGET" -name '.DS_Store' -delete
 
+# Strip symlinks, loudly. cp -R copies a link as a link, and .claude/ is where other
+# programs write: Obsidian Copilot links its own skills into .claude/skills, with
+# absolute targets under the owner's home (2026-10-02). None of them is part of the OS,
+# and no link is ever correct in a self-contained copy. Stripped rather than refused,
+# so an export still works while a plugin keeps re-linking; listed, so it is never
+# silent. leak-check.sh refuses any link that gets past this.
+links="$( cd "$TARGET" && find . -type l )"
+if [ -n "$links" ]; then
+  echo "Stripping symlinks (never part of a shareable copy):"
+  printf '%s\n' "$links" | sed 's/^/  /'
+  ( cd "$TARGET" && find . -type l -exec rm -f {} + )
+  echo
+fi
+
+# Placeholder the claude.ai connector ids in agent tool lists. A subagent's `tools:` must
+# name the MCP server by its installation-specific id (mcp__<uuid>__tool), so the private
+# copy carries the owner's. It is no secret, but it is an identifier, and in a fork it would
+# point at nothing. The agent files' own comments tell a fork to put in its own.
+for f in "$TARGET"/.claude/agents/*.md; do
+  [ -f "$f" ] || continue
+  sed -E 's/mcp__[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}__/mcp__YOUR-MAIL-CONNECTOR-ID__/g' \
+    "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+
 # --- leak check --------------------------------------------------------------
 # Fail loudly if any known-personal token slipped into the export. The scan lives
 # in leak-check.sh so publish.sh can run the identical check over things that are

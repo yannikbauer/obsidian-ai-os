@@ -21,7 +21,7 @@ The system separates **generic** from **personal** at every layer. This is what 
 | Navigation | — | `maps/vault-map.md` |
 | Tool logic | `.claude/skills/` | `integrations/*.md` |
 
-**Tools are optional.** A tool is configured iff `integrations/<tool>.md` exists; that file declares its `**Role:**` (`task-system`, `calendar`, `mail`). Skills resolve roles at point of use and degrade gracefully when a role is unfilled — never describe a tool the user has not configured. The `notes` role is the substrate: it is always present and backed by `maps/vault-map.md`, so it needs no integration file to *function*. It may still have one — an optional API layer over the notes tool. Read its absence differently from the other roles: no file means **no API**, never no notes.
+**Tools are optional.** A tool is configured iff `integrations/<tool>.md` exists; that file declares its `**Role:**` (`task-system`, `calendar`, `mail`, `transcription`, `phone`). Skills resolve roles at point of use and degrade gracefully when a role is unfilled — never describe a tool the user has not configured. The `notes` role is the substrate: it is always present and backed by `maps/vault-map.md`, so it needs no integration file to *function*. It may still have one — an optional API layer over the notes tool. Read its absence differently from the other roles: no file means **no API**, never no notes.
 
 Skills contain **generic logic** ("how to operate a task-system's tasks and docs"). Your **specifics** (IDs, workflow, conventions) live in `integrations/`. A skill says *"read `_AI/integrations/<tool>.md` for the user's setup"* rather than hardcoding anything. Keep this separation intact when editing — and note that **moving** text is when it breaks: relocated text arrives already-approved and gets re-read against its old home's constraints, not its new one (ledger L004).
 
@@ -76,7 +76,8 @@ rewriting live query blocks, permanent deletion, and blanket `git add -A` stagin
 tree more than one session writes to. A hook firing means a rule was about to be broken:
 read the reason and take the alternative it names, rather than working around it. The
 hooks are a floor, not a substitute for the human review gate — and they fail *open*,
-so a hook that cannot run silently stops protecting anything. `install.sh` checks for
+so a hook that cannot run silently stops protecting anything. The exception is a hook
+that does not parse: that one blocks everything it matches (ledger L024). `install.sh` checks for
 its `jq` dependency for that reason. See `.claude/README.md`.
 
 **A gate can only see the route it matches — so route note writes where it can see them.**

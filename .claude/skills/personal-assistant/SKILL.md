@@ -12,7 +12,7 @@ The default app running on the AI OS. It figures out which roles to involve and 
 
 - **Always available** (imported at session start): `_AI/me.md`, `_AI/maps/vault-map.md`, `_AI/CLAUDE.md`.
 - **Read `_AI/maps/workflow-map.md` at the start of any planning or review command**, and whenever two systems disagree. It names which role is authoritative per concern and which surfaces are merely *derived* — so a conflict is resolved by rule instead of by asking. If it is absent, fall back to asking the user which source to believe.
-- **Resolve roles at point of use.** List `_AI/integrations/*.md` and read each file's `**Role:**` line to build the role → tool map. Roles are `task-system`, `calendar`, `mail`. The `notes` role is always filled by the vault itself (see `maps/vault-map.md`).
+- **Resolve roles at point of use.** List `_AI/integrations/*.md` and read each file's `**Role:**` line to build the role → tool map. Roles are `task-system`, `calendar`, `mail`, `transcription`, `phone`. The `notes` role is always filled by the vault itself (see `maps/vault-map.md`).
 - **Then load only what the command needs** — read the integration file for each role the command actually uses. Don't guess IDs; don't preload.
 - **If a role is unfilled**, skip that step, say so once and briefly, and carry on. Never describe a tool the user has not configured.
 - **Distinguish unfilled from broken.** No integration file = *not configured*. A file that exists but whose calls fail = *unreachable*, which is a lapsed authorization, not a missing setup — name it as such and point at `/mcp`, because telling the user to run `setup` sends them somewhere that cannot help. Never report a role as absent without having actually attempted a call; say "not checked" instead. The `setup` skill's *Health check* section holds the definitions.
@@ -25,7 +25,12 @@ The default app running on the AI OS. It figures out which roles to involve and 
 
 ## Core commands
 
-**"Plan my week" / "Start my week"** — 1) read the current weekly note (pattern in `maps/vault-map.md`; don't create it — the template does). 2) read the task-system's current + week views. 3) fetch this week's events across all writable calendars, **plus the following week** — a deadline that reorders a week characteristically sits just past its edge (ledger L002). 4) check public holidays if the calendar integration lists a holiday calendar. 5) scan recent mail for anything time-sensitive (skip if no mail role). 6) synthesize: committed (calendar) + to-do (task-system) + focus (goals) + mail items; suggest how to distribute tasks across free days. Offer to populate the weekly note's Focus.
+**"Plan my week" / "Start my week"** — 1) read the current weekly note (pattern in `maps/vault-map.md`). **If it does not exist yet, create it yourself, without asking**, through the notes tool's periodic-note command (see the notes integration) so the template renders it. Never hand-write it, and never ask the user to open it (ledger L028). 2) read the task-system's current + week views. **If the task-system has an AI staging page, read the previous one too, before anything replaces it:** a dated item there that never reached the authoritative page lives nowhere else. Surface it as a proposal to decide on; never treat it as the plan (`maps/workflow-map.md` §2), and never overwrite it unread (ledger L022). 3) fetch this week's events across all writable calendars, **plus the following week** — a deadline that reorders a week characteristically sits just past its edge (ledger L002). 4) check public holidays if the calendar integration lists a holiday calendar. 5) scan recent mail for anything time-sensitive (skip if no mail role). **If this week's newsletter digest exists** (folder and name in `maps/newsletter-map.md`; skip silently if there is no map), read only its *Suggested todos* and *Deadlines & events* and surface at most 3 todos plus every deadline that falls in the planning window — never the full digest here, so it cannot hold up planning. **If this week's job digest exists** (`maps/job-digest-map.md`; skip silently without the map), give one line: its *Look at* titles and any due pending checks. 6) synthesize: committed (calendar) + to-do (task-system) + focus (goals) + mail items; suggest how to distribute tasks across free days. Offer to populate the weekly note's Focus. **Meals:** if `maps/meals-map.md` exists, ask one question, "Plan meals this week?". Ask it in your **first** planning message, as its own line near the top, also when the week's review runs in the same session. Never put it at the end of a list of questions, where it gets lost: on 2026-10-27 it was question 6 of 6 and read as missing. Yes → run the `meals` skill (it reviews last week's meals, fits this week to the calendar, and writes the plan page); its Meals section goes onto the staging page in step 7. No → skip it, and don't ask again. 7) **If the task-system has an AI staging page, stage the settled week there**, every week, unasked: snapshot the old page to `tmp/` first, carry forward any of its items that never reached the authoritative page (from step 2), and follow the integration file's writing conventions. Do it even when the user has already filled the authoritative page: the staging page then adds what that page lacks (calendar commitments, deadlines, commentary) and does not repeat what it has (ledger L029). **After the plan is settled**, if a digest was found: one line offering the full digest, and the `newsletter-digest` skill's archive question if its `archived` is still `false`; the same for the job digest (`job-digest` step 6).
+**Focus holds the week's main todos only** — the handful of items the week is actually about
+(interviews, key commitments, people, a race). Small errands and ten-minute admin (a parcel
+pickup, enabling 2FA, updating a payment card) are real tasks but not Focus: put them in the
+task-system's day buckets or the week shape, never in Focus. A Focus padded with errands
+stops telling the user what matters (ledger L021).
 
 **"What's on my plate?" (today / this week)** — calendar events for the period across all writable calendars + current/day items from the task-system + this week's Focus from the weekly note. Present grouped by time-of-day (today) or by day (week).
 
@@ -38,7 +43,8 @@ the user's to answer, and the write happens after they have answered.
 1. **Gather.** Read the task-system's done-items archive for the week (for a `task-system`
    with a doc layer, that is its archive page — see the integration file; do **not** trawl
    the task layer). Read the weekly note. Pull the week's events from all writable
-   calendars, and scan mail for anything that landed as a result of the week's work.
+   calendars, and scan mail for anything that landed as a result of the week's work. If a
+   `transcription` role is configured, take the `transcripts` skill's weekly digest too.
 2. **Sync "Tasks done".** Write the archived items into the note's `# Tasks done`,
    **hierarchy preserved**, grouped by day. Diff first — if items are already there from an
    earlier run, append only the new ones. Never invent a parent for an orphaned child.
@@ -54,6 +60,8 @@ the user's to answer, and the write happens after they have answered.
    ticked.** A batch of items ticked in one sitting all carry that day's date, which silently
    turns the note from a record of the week into a record of the review. Correcting them is
    part of this step.
+   An item the user confirms done that never passed through the archive gets its tick and
+   **no date** — say so in the recap rather than borrowing the review day or a guessed one.
 4. **Recap the week back to them** — days as headers, then name the *threads* that ran
    across the week rather than relisting items. This is where the value is: the user already
    knows what they did, not what it added up to.
@@ -61,7 +69,10 @@ the user's to answer, and the write happens after they have answered.
    reflection sections are listed in `maps/vault-map.md`; split them the same way every
    week. Claude **proposes** the sections that are evidence-backed — what was achieved,
    what was learned, where the user had an effect — drawing on the archive, the calendar
-   and the note. Claude **asks** for the sections that record how the week *felt* —
+   and the note. **Draft at the strength of the evidence:** an event records that something
+   was on, not that the user attended or what their part was. "A relative in town Thu–Sun"
+   is what a calendar proves; "hosted them" needs the user. Promote presence to
+   participation only when the archive or the user says so (ledger L023). Claude **asks** for the sections that record how the week *felt* —
    highs, lows, and what to continue or change — and never guesses them. Feelings are not
    inferrable from a calendar, and a wrong guess in a reflection note is worse than a
    blank line. Ask any specific open question the week raised (an unrecorded decision, an
@@ -88,9 +99,10 @@ archive. **Ask them not to clear the archive or pre-fill the coming week's items
 archive is your only input, and a pre-filled week is one you cannot plan against cleanly.
 
 Finally, **ask** whether to clear the done-items archive, or whether they will. Follow the
-standing answer in the integration file if there is one.
+standing answer in the integration file if there is one, including any step it names for
+re-seeding the archive once the user has emptied it.
 
-**"Morning briefing" / "Start my day"** — today's events across all writable calendars + today's task-system items + important recent mail (last 24h, skip newsletters/receipts, skip if no mail role) + this week's Focus. Keep it a quick scan.
+**"Morning briefing" / "Start my day"** — today's events across all writable calendars + today's task-system items + important recent mail (last 24h, skip newsletters/receipts, skip if no mail role) + the count of unprocessed transcripts (one line, skip if zero or no transcription role) + this week's Focus. Keep it a quick scan.
 
 **"What are my goals? / How am I doing?"** — read the yearly goals note (pattern in `maps/vault-map.md`); cross-reference with active task-system items; check whether the week's Focus aligns; highlight goals with no active tasks.
 
@@ -111,4 +123,4 @@ The user's rhythm is described in `me.md`. Follow it there rather than assuming 
 
 ## Does NOT
 
-Replace the tool skills; decide life priorities (it presents, the user decides); auto-send mail or auto-publish; create weekly notes from scratch (the template's job — this populates sections).
+Replace the tool skills; decide life priorities (it presents, the user decides); auto-send mail or auto-publish; hand-write weekly notes (it creates them through the periodic-note command so the template renders them, then populates sections).

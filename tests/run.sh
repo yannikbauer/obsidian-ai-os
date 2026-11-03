@@ -212,7 +212,46 @@ case "$lerr" in
   *) echo "  FAIL leak-check: refusal message missing from stderr — got: ${lerr:-<nothing>}" >&2; FAIL=1 ;;
 esac
 lexpect 64 "$LTMP/does-not-exist.md" "a missing target is a usage error, not a clean pass"
+
+# A symlink's target is invisible to grep -r, so a link into the owner's home tree
+# passed the content scan clean (Copilot's skill links, 2026-10-02).
+mkdir -p "$LTMP/tree/skills"; printf 'nothing personal\n' > "$LTMP/tree/a.md"
+lexpect 0 "$LTMP/tree" "a clean directory passes"
+ln -s "$LTMP/elsewhere" "$LTMP/tree/skills/plugin-skill"
+lexpect 2 "$LTMP/tree" "a symlink anywhere in a directory is refused"
 rm -rf "$LTMP"
+
+# --- setup/export.sh strips symlinks ------------------------------------------
+# Run the real export over a minimal fake _AI with a planted link in .claude/skills,
+# the route a plugin actually took. Must exit 0 (stripped, not aborted), say so, and
+# leave no link in the copy.
+ETMP=$(mktemp -d)
+EAI="$ETMP/_AI"
+mkdir -p "$EAI/setup" "$EAI/tests" "$EAI/templates" "$EAI/.claude/skills/real" "$EAI/config"
+cp "$HOOKS/../setup/export.sh" "$HOOKS/../setup/leak-check.sh" "$EAI/setup/"
+for f in CLAUDE.md .gitignore VERSION LICENSE; do printf 'x\n' > "$EAI/$f"; done
+printf 'skill\n' > "$EAI/.claude/skills/real/SKILL.md"
+mkdir -p "$EAI/.claude/agents"
+printf 'tools: mcp__0123abcd-4567-89ab-cdef-0123456789ab__get_thread, Read\n' > "$EAI/.claude/agents/reader.md"
+ln -s "$ETMP/outside" "$EAI/.claude/skills/plugin-skill"
+eout=$(bash "$EAI/setup/export.sh" "$ETMP/out" 2>&1); egot=$?
+if grep -q 'mcp__YOUR-MAIL-CONNECTOR-ID__get_thread' "$ETMP/out/.claude/agents/reader.md" 2>/dev/null \
+   && ! grep -q '0123abcd' "$ETMP/out/.claude/agents/reader.md"; then
+  echo "  ok   export: an agent's connector id becomes a placeholder"
+else
+  echo "  FAIL export: connector id not placeholdered — $(cat "$ETMP/out/.claude/agents/reader.md" 2>&1)" >&2; FAIL=1
+fi
+if [ "$egot" -eq 0 ] && [ -z "$(find "$ETMP/out" -type l)" ] \
+   && [ -f "$ETMP/out/.claude/skills/real/SKILL.md" ]; then
+  echo "  ok   export: a planted symlink is stripped, real skills still ship"
+else
+  echo "  FAIL export: symlink strip — exit $egot, links left: $(find "$ETMP/out" -type l 2>/dev/null)" >&2; FAIL=1
+fi
+case "$eout" in
+  *"Stripping symlinks"*plugin-skill*) echo "  ok   export: the strip is announced, naming the link" ;;
+  *) echo "  FAIL export: strip was silent — output: $eout" >&2; FAIL=1 ;;
+esac
+rm -rf "$ETMP"
 
 # --- trace-write: only VAULT notes are traced ------------------------------
 # The Stop hook demands a file-log entry for everything this trace records, so a
@@ -257,7 +296,7 @@ rm -rf "$WTMP"
 # is a fixture written wrong.
 KTMP=$(mktemp -d); mkdir -p "$KTMP/_AI/.claude/hooks" "$KTMP/_AI/config"
 cp "$HOOKS/hooks/guard-clickup.sh" "$HOOKS/hooks/lib.sh" "$KTMP/_AI/.claude/hooks/"
-printf '# fixture allowlist\nPAGE-ALLOWED\n' > "$KTMP/_AI/config/clickup-replace-allow.local"
+printf '# fixture allowlist\nPAGE-ALLOWED\nPAGE-CLEAR headers-only\nPAGE-PLAIN no-links\n' > "$KTMP/_AI/config/clickup-replace-allow.local"
 kexpect() { # kexpect <want-exit> <json> <label>
   printf '%s' "$2" | CLAUDE_PROJECT_DIR="$KTMP" "$KTMP/_AI/.claude/hooks/guard-clickup.sh" >/dev/null 2>&1
   kgot=$?
@@ -276,6 +315,18 @@ kexpect 2 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"pa
 # and the old absolute hook denied it while its own message said to use a staging page (L006).
 kexpect 0 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-ALLOWED","content_edit_mode":"replace","content":"x"}}' \
   "allows replace on the allowlisted page"
+# A `headers-only` page (an archive) may be cleared to a skeleton of bold headers, never
+# rewritten: one stray item or link would make the clear a rewrite, so it is denied.
+kexpect 0 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-CLEAR","content_edit_mode":"replace","content":"**MON:**\n\n**TUE:**"}}' \
+  "allows a headers-only clear on a headers-only page"
+kexpect 2 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-CLEAR","content_edit_mode":"replace","content":"**MON:**\n- [x] item"}}' \
+  "denies a rewrite with items on a headers-only page"
+# A `no-links` page (a plain checklist) may be rewritten in full, but never with a ClickUp
+# URL in the new content: that is how a chip serialises, so a rewrite must not carry one.
+kexpect 0 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-PLAIN","content_edit_mode":"replace","content":"**THIS WEEK:**\n- [ ] Lasagne"}}' \
+  "allows a link-free rewrite on a no-links page"
+kexpect 2 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-PLAIN","content_edit_mode":"replace","content":"- [ ] [x](https://app.clickup.com/t/abc)"}}' \
+  "denies a rewrite carrying a ClickUp URL on a no-links page"
 kexpect 0 '{"tool_name":"mcp__x__clickup_update_document_page","tool_input":{"page_id":"PAGE-OTHER","name":"renamed"}}' \
   "a rename with no content is not a rewrite"
 # With no allowlist at all — a fresh install — every replace is denied. That is the safe default.
@@ -289,6 +340,26 @@ rm -rf "$KTMP"
 # Reaching this script at all is the violation: the matcher decides what arrives.
 expect 2 hooks/guard-mail.sh '{"tool_name":"mcp__x__send_message","tool_input":{"to":"a@b.c"}}'
 expect 0 hooks/guard-mail.sh 'not json'
+
+# --- guard-agent-read ---
+# The reader may Read only its own saved tool output. Paths use the real $HOME because
+# the hook resolves the tool-results directory from it.
+TR="$HOME/.claude/projects/p/s/tool-results/mcp-get_thread-1.txt"
+expect 0 hooks/guard-agent-read.sh \
+  "{\"agent_type\":\"newsletter-reader\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$TR\"}}"
+expect 2 hooks/guard-agent-read.sh \
+  '{"agent_type":"newsletter-reader","tool_name":"Read","tool_input":{"file_path":"/v/_AI/me.md"}}'
+expect 2 hooks/guard-agent-read.sh \
+  "{\"agent_type\":\"newsletter-reader\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$HOME/.claude/projects/p/s/tool-results/../../../../../v/_AI/me.md\"}}"
+expect 0 hooks/guard-agent-read.sh \
+  "{\"agent_type\":\"job-mail-reader\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$TR\"}}"
+expect 2 hooks/guard-agent-read.sh \
+  '{"agent_type":"job-mail-reader","tool_name":"Read","tool_input":{"file_path":"/v/_AI/me.md"}}'
+expect 0 hooks/guard-agent-read.sh \
+  '{"tool_name":"Read","tool_input":{"file_path":"/v/_AI/me.md"}}'
+expect 0 hooks/guard-agent-read.sh \
+  '{"agent_type":"scout-researcher","tool_name":"Read","tool_input":{"file_path":"/v/_AI/me.md"}}'
+expect 0 hooks/guard-agent-read.sh 'not json'
 
 # --- trace-write ---
 # Not an exit-code assertion: this hook is judged by what it writes.
@@ -946,6 +1017,23 @@ for pth in tools setup templates VERSION tests .claude; do
 done
 echo "  ok   publish.sh: EXPORTED_PATHS covers every shipped path"
 
+# Curated notes replace the private commit subjects in BOTH public places, and are
+# leak-checked before anything runs. A clean subject can still be personal.
+pgrep_ok '[ -z "$NOTES" ] || ENTRIES="$(cat "$NOTES")"' "--notes replaces the changelog entry"
+pgrep_ok 'BODY="$(cat "$NOTES")"' "--notes replaces the commit body"
+pgrep_ok '! --notes: $NOTES carries a personal token' "--notes is leak-checked and aborts on a hit"
+nl_tok="$(grep -v '^#' "$HOOKS/../config/leak-patterns.local" 2>/dev/null | grep . | head -1 || true)"
+if [ -n "$nl_tok" ]; then
+  NTMP=$(mktemp -d)
+  printf -- '- a line with %s in it\n' "$nl_tok" > "$NTMP/notes-dirty.md"
+  if bash "$PS" --dry-run --notes "$NTMP/notes-dirty.md" >/dev/null 2>&1; then
+    echo "  FAIL publish.sh: --notes with a personal token did not abort" >&2; FAIL=1
+  else
+    echo "  ok   publish.sh: --notes with a personal token aborts before exporting"
+  fi
+  rm -rf "$NTMP"
+fi
+
 # A pushed tag is not a Release: the repo page lists Release objects, and a tag alone
 # leaves it reading "N tags". The notes must be READ BACK from the changelog this run
 # wrote, never rebuilt, or the two say different things about the same version.
@@ -959,5 +1047,120 @@ pgrep_ok 'gh CLI not found' "a missing gh degrades to a warning, not a failure"
 grep -Fq '$AI_DIR/VERSION' "$HOOKS/../setup/export.sh" \
   && echo "  ok   export.sh ships VERSION" \
   || { echo "  FAIL export.sh does not copy VERSION" >&2; FAIL=1; }
+
+# --- every hook parses -----------------------------------------------------------
+# A hook that fails to PARSE exits 2, and exit 2 is a deny. So a syntax error does not
+# fail open like every other failure in lib.sh: it blocks every tool call the hook
+# matches, including the edit that would fix it. Seen 2026-09-18, when guard-collision.sh
+# went live with a `case` inside `$(...)` and locked Bash, Write and Edit in every session
+# until the user ran chmod -x by hand. Parse with both shells: /bin/sh is bash in POSIX mode.
+for h in "$HOOKS"/hooks/*.sh; do
+  if sh -n "$h" 2>/dev/null && bash -n "$h" 2>/dev/null; then
+    echo "  ok   parses: $(basename "$h")"
+  else
+    echo "  FAIL does not parse: $(basename "$h")" >&2; FAIL=1
+  fi
+done
+
+# --- guard-collision (cross-session writes) ----------------------------------------
+# The hook ASKS rather than denies, so every hook exit is 0 and the assertion is on
+# the output instead. Runs against a temporary vault whose _AI/ is a real git repo, so
+# the staging branch sees real `git status` output.
+CTMP=$(mktemp -d)
+mkdir -p "$CTMP/_AI/.claude/hooks" "$CTMP/_AI/history" "$CTMP/_AI/skills" "$CTMP/Notes"
+cp "$HOOKS/hooks/guard-collision.sh" "$HOOKS/hooks/lib.sh" "$CTMP/_AI/.claude/hooks/"
+CHOOK="$CTMP/_AI/.claude/hooks/guard-collision.sh"
+
+cexpect() { # cexpect <ask|allow> <json> <label>
+  cout=$(printf '%s' "$2" | env CLAUDE_PROJECT_DIR="$CTMP" "$CHOOK" 2>/dev/null)
+  case "$cout" in *'"permissionDecision":"ask"'*) cgot=ask ;; *) cgot=allow ;; esac
+  if [ "$cgot" = "$1" ]; then
+    echo "  ok   collision: $3"
+  else
+    echo "  FAIL collision: $3 — wanted $1, got $cgot" >&2; FAIL=1
+  fi
+}
+crec() { # crec <session> <tool> <path-field> <path> — a PostToolUse record
+  printf '%s' '{"hook_event_name":"PostToolUse","session_id":"'"$1"'","tool_name":"'"$2"'","tool_input":{"'"$3"'":"'"$4"'"}}' \
+    | env CLAUDE_PROJECT_DIR="$CTMP" "$CHOOK" >/dev/null 2>&1
+}
+cpre() { # cpre <session> <abs-path> — a PreToolUse Write payload
+  printf '%s' '{"hook_event_name":"PreToolUse","session_id":"'"$1"'","tool_name":"Write","tool_input":{"file_path":"'"$2"'","content":"x"}}'
+}
+
+cexpect allow 'not json at all' "malformed input is allowed"
+crec sessA Write file_path "$CTMP/Notes/a.md"
+cexpect allow "$(cpre sessA "$CTMP/Notes/a.md")" "a session's own earlier write does not ask"
+cexpect ask   "$(cpre sessB "$CTMP/Notes/a.md")" "another session's recent write asks"
+cexpect allow "$(cpre sessB "$CTMP/Notes/a.md")" "asks once per path and session, not on every edit"
+cexpect allow "$(cpre sessB "$CTMP/Notes/other.md")" "an untouched file does not ask"
+
+crec sessA mcp__obsidian__vault_patch path "Notes/c.md"
+cexpect ask   "$(cpre sessB "$CTMP/Notes/c.md")" "an MCP write (vault-relative path) is matched against an absolute one"
+
+crec sessA Edit file_path "$CTMP/_AI/history/session-log.md"
+cexpect allow "$(cpre sessB "$CTMP/_AI/history/session-log.md")" "append-only history logs are exempt"
+
+printf '%s\t%s\t%s\n' "$(( $(date +%s) - 7200 ))" sessA "$CTMP/Notes/old.md" >> "$CTMP/_AI/tmp/touches.log"
+cexpect allow "$(cpre sessB "$CTMP/Notes/old.md")" "a write older than the window does not ask"
+
+git -C "$CTMP/_AI" init -q && printf 'v1\n' > "$CTMP/_AI/skills/x.md" && printf 'v1\n' > "$CTMP/_AI/skills/y.md" \
+  && git -C "$CTMP/_AI" -c user.email=t@t -c user.name=t add skills/x.md skills/y.md \
+  && git -C "$CTMP/_AI" -c user.email=t@t -c user.name=t commit -qm init
+printf 'v2\n' > "$CTMP/_AI/skills/x.md"; printf 'v2\n' > "$CTMP/_AI/skills/y.md"
+crec sessA Edit file_path "$CTMP/_AI/skills/x.md"
+cbash() { printf '%s' '{"hook_event_name":"PreToolUse","session_id":"sessB","tool_name":"Bash","tool_input":{"command":"'"$1"'"}}'; }
+cexpect ask   "$(cbash 'cd _AI && git add skills/x.md && git commit -m x')" "staging another session's file asks"
+cexpect allow "$(cbash 'git add skills/y.md')" "staging only this session's files does not ask"
+cexpect allow "$(cbash 'git status --short')" "a non-staging git command does not ask"
+rm -rf "$CTMP"
+
+# --- macwhisper-live (read-only transcript reader) ---------------------------------
+# A minimal copy of the three tables it reads, with the columns it uses. If MacWhisper
+# changes its schema, the real database breaks first; this pins what the script expects.
+if command -v sqlite3 >/dev/null 2>&1; then
+  LTMP=$(mktemp -d); LDB="$LTMP/main.sqlite"
+  sqlite3 "$LDB" "
+    create table session (id blob primary key, dateCreated datetime, userChosenTitle text,
+      aiTitle text, playbackDuration double, dateDeleted double);
+    create table speaker (id blob primary key, name text);
+    create table transcriptline (id blob primary key, dateCreated datetime, text text,
+      start integer, sessionId blob, speakerID blob, orderIndex integer);
+    insert into session values (x'01', '2026-01-01 10:00:00', 'Old', null, 60, null);
+    insert into session values (x'02', '2026-01-02 10:00:00', 'Meeting - Chrome', null, 90, null);
+    insert into speaker values (x'A1', 'Speaker 1'), (x'A2', 'Speaker 2');
+    insert into transcriptline values
+      (x'10', '2026-01-02 10:00:05', 'Hello.',        1000, x'02', x'A1', 1),
+      (x'11', '2026-01-02 10:00:08', 'Agenda first.', 4000, x'02', x'A1', 2),
+      (x'12', '2026-01-02 10:00:12', 'Sounds good.', 65000, x'02', x'A2', 3),
+      (x'13', '2026-01-01 10:00:05', 'Old line.',     1000, x'01', x'A1', 1);"
+  LIVE="$HOOKS/../tools/macwhisper-live.sh"
+  lcheck() { # lcheck <label> <expected-substring> <args...>
+    label=$1; want=$2; shift 2
+    lout=$(env MACWHISPER_DB="$LDB" sh "$LIVE" "$@" 2>&1)
+    case "$lout" in
+      *"$want"*) echo "  ok   macwhisper-live: $label" ;;
+      *) echo "  FAIL macwhisper-live: $label — wanted '$want'" >&2; echo "$lout" >&2; FAIL=1 ;;
+    esac
+  }
+  lcheck "defaults to the newest recording" "# Meeting - Chrome"
+  lcheck "merges consecutive lines of one speaker" "[00:01] Speaker 1: Hello. Agenda first."
+  lcheck "starts a new block when the speaker changes" "[01:05] Speaker 2: Sounds good."
+  lcheck "next check re-reads the last, possibly growing, line" "next check: --since 2"
+  lcheck "counts the lines it printed" "3 new line(s)"
+  lcheck "--since returns only the tail" "1 new line(s)" --since 2
+  lcheck "--session selects an older recording" "Old line." --session 01
+  lcheck "--list shows recordings" "Meeting - Chrome" --list
+  lcheck "rejects a non-hex session id" "hex id prefix" --session "x'; drop"
+  # --recording-start: a voice memo's audio birth time wins over dateCreated.
+  mkdir "$LTMP/ExternalMedia"
+  touch -t 202601010930.00 "$LTMP/ExternalMedia/01000000-0000-0000-0000-000000000000_voicememo_AB.m4a"
+  sqlite3 "$LDB" "update session set id = x'01000000000000000000000000000000' where id = x'01';
+                  update transcriptline set sessionId = x'01000000000000000000000000000000' where sessionId = x'01';"
+  lcheck "--recording-start reads a voice memo's audio birth time" "2026-01-01T09:30:00	voice memo audio" --recording-start --session 01
+  lcheck "--recording-start falls back to the session start" "session created (start for meetings" --recording-start --session 02
+  rm -rf "$LTMP"
+  lcheck "a missing database is reported" "database not found" --list
+fi
 
 exit $FAIL

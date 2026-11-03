@@ -122,25 +122,42 @@ written at install time instead of committed.
     │   ├── calendar.md           role: calendar
     │   ├── clickup.md            role: task-system
     │   ├── gmail.md              role: mail
+    │   ├── macwhisper.md         role: transcription
+    │   ├── phone.md              role: phone — the mirror app, modes, start checklist, troubleshooting
+    │   ├── <budgeting-app>.md    no role — an app on the phone role; app map for the finances skill
     │   └── obsidian.md           role: notes — OPTIONAL; absent means no API, not no notes
     │
     ├── .claude/                everything Claude Code reads                    generic
     │   ├── settings.json         model pin + hooks; symlinked from the vault root
-    │   ├── hooks/                deny gates, one ask gate, write trace, two Stop hooks
+    │   ├── hooks/                deny gates, two ask gates, write trace, two Stop hooks
     │   ├── .gitignore            a whitelist — other programs write here too
+    │   ├── agents/               subagents; symlinked from the vault root
+    │   │   ├── newsletter-reader.md  reads newsletter threads + its own saved output, nothing else
+    │   │   ├── job-mail-reader.md    same shape, for job-alert mails
+    │   │   └── scout-researcher.md   searches + fetches the web for the digest's Scout
     │   └── skills/               capabilities, loaded on demand
     │       ├── personal-assistant/   the orchestrator — cross-tool workflows
     │       ├── obsidian/             notes: the always-present substrate
     │       ├── calendar/  clickup/  mail/    one per tool role
+    │       ├── transcripts/          meeting & memo transcripts: triage, distill, recall
+    │       ├── newsletter-digest/    weekly cross-source digest of newsletters
+    │       ├── job-digest/           job-alert mails scored against the search, plus a market log
+    │       ├── meals/                meal-plan logistics: cooked-tracking, calendar slots, suggestions
+    │       ├── finances/             read-only finance snapshots, sheet + advisor-brief upkeep
+    │       ├── phone/                drive Android apps through a scrcpy mirror; read-only by default
     │       ├── setup/                configure and health-check integrations
     │       ├── retro/                turn a session into lessons, and apply them
     │       ├── usage/                what this account actually spends
     │       └── demo/                 present the OS to someone else
     │
-    ├── tools/                  read-only scripts skills call by path           generic
+    ├── tools/                  scripts skills call by path; most read-only     generic
     │   ├── session-digest.sh     reduce a transcript to what a retro needs
     │   ├── check-coverage.sh     the enumerations that must match reality
-    │   └── usage.sh              token usage, read from Claude Code's own logs
+    │   ├── usage.sh              token usage, read from Claude Code's own logs
+    │   ├── macwhisper-live.sh    a recording's transcript, live, from MacWhisper's database
+    │   ├── phonemirror.sh        check the phone mirror (may `adb connect`); rebuild writes its app bundle
+    │   ├── phonemirror-launcher.sh   the mirror's launcher: picks USB or Wi-Fi, execs scrcpy
+    │   └── phonemirror-stub.c        the bundle executable; only execs the launcher
     │
     ├── tests/                  fixtures for every hook, gate and script        generic
     │   ├── run.sh                every hook and gate, including malformed input
@@ -158,7 +175,7 @@ written at install time instead of committed.
     │   └── working-notes/        one file per in-flight roadmap item
     │
     ├── templates/              skeletons for scaffolding and sharing           generic
-    │   └── integrations/         one per tool role
+    │   └── integrations/         one per tool pack that ships a template
     ├── setup/                                                                  generic
     │   ├── install.sh            root glue, scaffolding, and a self-check
     │   ├── export.sh             clean shareable copy + leak check
@@ -403,6 +420,43 @@ tools are account connectors**, which follow your account onto every surface.
 A server registered with the default `local` scope is bound to the one directory
 it was added in and will not follow you; use `--scope user` if you want it
 everywhere.
+
+## Phone mirror (optional)
+
+The `phone` role drives an Android phone through **PhoneMirror**: a small macOS app bundle
+(`~/Applications/PhoneMirror.app`, bundle ID `local.phonemirror`) wrapping a copy of
+[scrcpy](https://github.com/Genymobile/scrcpy). It is an app rather than a bare `scrcpy`
+call so that computer use can grant it by bundle ID. Needs `brew install scrcpy
+android-platform-tools` and Xcode's command-line tools (`cc`).
+
+**How it's built.** `Contents/MacOS/PhoneMirror` is a compiled stub
+(`tools/phonemirror-stub.c`) that execs `Contents/Resources/launch.sh`
+(`tools/phonemirror-launcher.sh`), which picks the device and execs the bundled scrcpy.
+The stub exists because launchd refuses a shell script as a bundle executable (spawn
+error 162). Every step is an `exec`, so the window keeps the bundle's identity.
+`tools/phonemirror.sh rebuild` re-copies scrcpy from Homebrew, installs the launcher,
+compiles the stub and re-signs. Run it after `brew upgrade scrcpy` or after editing either
+source. `tools/phonemirror.sh check` verifies adb, signature, versions, launcher drift and
+the running app. The bundle itself, its `Info.plist` with bundle ID and `ADB` path, is
+made once by hand; `rebuild` refreshes it but does not create it.
+
+**Modes.** The launcher prefers Wi-Fi whenever adb has the phone wirelessly, even with
+the cable in, so pulling the cable doesn't kill the mirror.
+
+| Mode | Phone side | Notes |
+|---|---|---|
+| **Wi-Fi** | Developer options → *Wireless debugging* on, same LAN as the Mac | adb finds the phone over mDNS; the port changes on every restart, nothing to read out |
+| **Cable** | USB debugging on, data cable, *Wireless debugging* off | lower latency, charges the phone |
+| **Pair** (once per Mac) | *Pair device with pairing code*, read out the code | the pairing port is advertised over mDNS (`_adb-tls-pairing`); a restart doesn't undo pairing |
+
+The Mac doesn't need to be on Wi-Fi itself; Ethernet on the same network works. Guest
+networks usually block it. **Switch Wireless debugging off when you're done**: while it's
+on, paired machines on the network can open a debug channel to the phone. Android turns it
+off on its own when the phone changes networks.
+
+Per-user specifics (device, display, start checklist, troubleshooting) live in
+`integrations/phone.md`; the skill's rules (read-only by default, no codes, no payments)
+in `.claude/skills/phone/SKILL.md`.
 
 ## Working on the OS
 

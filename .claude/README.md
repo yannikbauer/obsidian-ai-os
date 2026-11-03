@@ -63,9 +63,37 @@ its owner to switch hooks off, which costs every gate here. The seal is the rout
 convention, not this hook: **note writes go through the MCP tools, and fall back to
 `Write`/`Edit` — never Bash.**
 
+## A scoped tool for an untrusted reader: `guard-agent-read.sh`
+
+`newsletter-reader` reads untrusted mail, so it gets nothing to act with. It does get
+`Read`, because Claude Code saves any MCP result over 50,000 characters to
+`~/.claude/projects/*/tool-results/` and returns only a pointer. A subagent's `tools:`
+list cannot scope a path, so the hook does: when `agent_type` is `newsletter-reader`, a
+Read outside that directory (or containing `..`) is denied. Every other caller passes
+untouched. Fixtures prove the logic; whether the harness sends `agent_type` has to be
+proven live, from a session started after the change (ledger L033).
+
+## Concurrent sessions: `guard-collision.sh`
+
+Several sessions can run against one vault and one `_AI/` tree. Claude Code already
+refuses a `Write`/`Edit` to a file that changed since it was read, so bytes are rarely
+lost. What goes wrong is *intent*: two sessions reshape one file in different
+directions, or one commits the other's unfinished work. Git sees none of this for vault
+notes. This hook records every write per session in `tmp/touches.log` (PostToolUse).
+It **asks**, once per file and session, before a write to a file another session wrote
+in the last 30 minutes (`AIOS_COLLISION_WINDOW`), and before a `git add`/`commit` that
+would stage such a file. `_AI/history/` is exempt because every session appends to it by design.
+
 ## Writing a hook command
 
-Two rules, both learned by shipping a hook that looked installed and never ran:
+**A hook that does not parse fails closed.** A shell syntax error exits 2, and exit 2
+is a deny. So unlike every failure `lib.sh` handles, a hook that doesn't parse blocks
+every tool call it matches, including the edit that would fix it (2026-09-18). Run
+`sh -n` on a hook before wiring it into settings. `tests/run.sh` parses every hook for
+this reason. If one is already live and broken, `chmod -x` it from your own terminal: a
+hook that cannot execute exits 126, which does not block.
+
+Two more rules, both learned by shipping a hook that looked installed and never ran:
 
 - **Brace the variable and quote the path**: `"\"${CLAUDE_PROJECT_DIR}/_AI/.claude/hooks/x.sh\""`.
   A vault path containing a space (this one does) splits an unquoted command and it

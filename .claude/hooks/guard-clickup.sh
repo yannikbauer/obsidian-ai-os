@@ -28,17 +28,44 @@ page=$(field '.tool_input.page_id')
 AI_ROOT="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd)"
 ALLOW="$AI_ROOT/config/clickup-replace-allow.local"
 
+# An allowlist line is `<page-id>` (full rewrite) or `<page-id> headers-only`. The second
+# form exists for an archive page that must be CLEARED, not rewritten (added 2026-10-19):
+# the replace is allowed only if every non-blank line of the new content is a bold header
+# like `**MON:**`. So the one write it permits leaves no items, links or chips behind,
+# and a full rewrite of that page stays banned. That a clear is SAFE (everything on the
+# page already reached the notes) is Claude's to verify, per integrations/.
+#
+# `<page-id> no-links` (added 2026-10-20) is for a plain page Claude rewrites in full, like a
+# meal-plan checklist: the replace is allowed only if the new content contains no ClickUp
+# URL. A chip always serialises with one, so a page written this way never gains a chip from
+# Claude. Whether the page it replaces had one is Claude's to check before writing.
 if [ -n "$page" ] && [ -f "$ALLOW" ]; then
-  while IFS= read -r id || [ -n "$id" ]; do
-    case "$id" in ''|\#*) continue ;; esac
-    # Trim surrounding whitespace without spawning a process.
-    id=$(printf '%s' "$id" | tr -d '[:space:]')
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|\#*) continue ;; esac
+    # shellcheck disable=SC2086 # word-splitting the line into id + qualifier is the point
+    set -- $line
+    id=${1:-}; qual=${2:-}
     [ -n "$id" ] || continue
-    if [ "$id" = "$page" ]; then
-      # Allowlisted. The remaining conditions (page name, chip-signature scan) are
-      # Claude's to check and are stated in integrations/ — this hook cannot read the API.
-      exit 0
-    fi
+    [ "$id" = "$page" ] || continue
+    case "$qual" in
+      '')
+        # Allowlisted. The remaining conditions (page name, chip-signature scan) are
+        # Claude's to check and are stated in integrations/ — this hook cannot read the API.
+        exit 0 ;;
+      headers-only)
+        if printf '%s\n' "$content" | grep -v '^[[:space:]]*$' \
+             | grep -qv '^[[:space:]]*\*\*[^*][^*]*:\*\*[[:space:]]*$'; then
+          deny "Page '$page' is allowlisted for headers-only replace: the new content may contain only bold section headers (e.g. **MON:**), one per line. This content has other lines, so it would be a rewrite, not a clear."
+        fi
+        exit 0 ;;
+      no-links)
+        if printf '%s' "$content" | grep -qi 'clickup\.com'; then
+          deny "Page '$page' is allowlisted for no-links replace: the new content must not contain a ClickUp URL (that is how chips serialise). Remove the link, or write it as plain text."
+        fi
+        exit 0 ;;
+      *)
+        deny "Allowlist line for page '$page' has an unknown qualifier '$qual' (known: 'headers-only', 'no-links'). Fix _AI/config/clickup-replace-allow.local." ;;
+    esac
   done < "$ALLOW"
 fi
 
