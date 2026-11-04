@@ -165,6 +165,10 @@ scaffold "templates/publish.template.local"              "config/publish.local"
 # the knob is there
 scaffold "templates/correction-words.template.local"      "config/correction-words.local"
 scaffold "templates/clickup-replace-allow.template.local" "config/clickup-replace-allow.local"
+# all-comments by default: no folder is private until the user says so
+scaffold "templates/sensitivity.template.local"           "config/sensitivity.local"
+# all-comments by default: the search index runs on its built-in defaults
+scaffold "templates/search-index.template.local"          "config/search-index.local"
 
 # integrations/ stays EMPTY on purpose: in this framework a file's existence is the
 # on-switch, so a placeholder .md here would read as a half-configured tool. The
@@ -217,6 +221,19 @@ if [ -x /usr/bin/jq ]; then
 else
   echo "  FAIL /usr/bin/jq missing — hooks fail open, so the safety gates will not enforce" >&2
   FAILED=1
+fi
+
+# Vault search is optional, so its tools are reported, never a failure. Without uv the
+# search tool cannot run; without Ollama it can only build a keyword index.
+if command -v uv >/dev/null 2>&1; then
+  echo "  ok   uv present (vault search can run)"
+else
+  echo "  info uv not found — optional; vault search needs it (https://docs.astral.sh/uv/)"
+fi
+if command -v ollama >/dev/null 2>&1; then
+  echo "  ok   ollama present (local embeddings for vault search)"
+else
+  echo "  info ollama not found — optional; without it vault search is keywords only"
 fi
 
 while IFS= read -r imp; do

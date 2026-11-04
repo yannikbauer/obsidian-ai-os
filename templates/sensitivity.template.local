@@ -1,0 +1,19 @@
+# Folder-level sensitivity rules. One rule per line:  <glob> = private|secret
+# Blank lines and #-comments are ignored. The glob is matched against the
+# VAULT-RELATIVE path, as a shell case pattern, so `*` also crosses `/`
+# (`Journal/*` covers every subfolder). `**` is accepted and means the same.
+#
+# A note's own frontmatter (`sensitivity: private|secret`) counts too; the
+# stricter of the two wins. No rule and no frontmatter = normal.
+#
+#   private  indexed; search returns a pointer unless the session opts in
+#            (AIOS_INCLUDE_PRIVATE=1); Read asks first
+#   secret   as private, plus secret values are redacted in the index and
+#            search never returns its text
+#
+# Read by guard-sensitive-read.sh and by the search index. Never exported:
+# your folder names describe your vault.
+#
+# Examples:
+# Journal/* = private
+# Therapy/* = private

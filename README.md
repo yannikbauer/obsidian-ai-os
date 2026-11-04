@@ -113,6 +113,8 @@ written at install time instead of committed.
     │   ├── readonly-zones.local    folders the AI must never write into
     │   ├── correction-words.local  what counts as you correcting the AI
     │   ├── clickup-replace-allow.local  doc pages the AI may rewrite whole
+    │   ├── sensitivity.local       folders whose notes are private or secret
+    │   ├── search-index.local      what the search index skips, and which folders are third-party
     │   └── README.md               what reads each knob, and how each one degrades
     │
     ├── maps/                   orientation — structure, not content            personal
@@ -157,7 +159,10 @@ written at install time instead of committed.
     │   ├── macwhisper-live.sh    a recording's transcript, live, from MacWhisper's database
     │   ├── phonemirror.sh        check the phone mirror (may `adb connect`); rebuild writes its app bundle
     │   ├── phonemirror-launcher.sh   the mirror's launcher: picks USB or Wi-Fi, execs scrcpy
-    │   └── phonemirror-stub.c        the bundle executable; only execs the launcher
+    │   ├── phonemirror-stub.c        the bundle executable; only execs the launcher
+    │   ├── vault-search.py       hybrid search over the notes: local embeddings + keywords, one SQLite file
+    │   ├── frontmatter-set.py    the bulk frontmatter writer: checked, snapshotted, logged
+    │   └── frontmatter-polish/   propose a description and language per note (local or cloud model); review table
     │
     ├── tests/                  fixtures for every hook, gate and script        generic
     │   ├── run.sh                every hook and gate, including malformed input
@@ -189,7 +194,7 @@ written at install time instead of committed.
     │   └── public-ci.yml         the PUBLIC repo's CI; ships as ci.yml
     │
     ├── tmp/                    snapshots, scratch, hook traces                 gitignored
-    └── databases/              future search index                             gitignored
+    └── databases/              the search index; rebuildable, never committed  gitignored
 ```
 
 ### What `install.sh` creates
@@ -212,10 +217,12 @@ safe to re-run:
 | `config/publish.local` | template | your destination; ships commented out |
 | `config/correction-words.local` | template | what counts as you correcting the AI; all comments by default, so the built-in English list stays in force |
 | `config/clickup-replace-allow.local` | template | task-system page ids the AI may rewrite in full; empty by default, so every whole-page rewrite is denied |
+| `config/sensitivity.local` | template | folders whose notes are private or secret; all comments by default, so only frontmatter labels count |
+| `config/search-index.local` | template | which folders the search index skips or flags as third-party; all comments by default, so the built-in defaults apply |
 | `integrations/` | — | **empty on purpose**: a file's existence is the on-switch, so a placeholder here would read as a half-configured tool. The `setup` skill writes the real files. |
 
-`databases/` is not created: it is a placeholder for a search index that does not
-exist yet.
+`databases/` is not created either: the first `tools/vault-search.py index` makes it (see
+[Vault search](#vault-search)). Deleting it costs a rebuild, nothing else.
 
 The same run also writes the four **vault-root** entries marked in the tree above. They are
 the glue described under [Why the files sit where they do](#why-the-files-sit-where-they-do),
@@ -233,8 +240,9 @@ because these are design decisions, not a backlog of oversights.
   flatten to plain links on read, so writing the page back replaces every one of them.
   The OS appends, and proposes the rest as text for you to apply. That is less
   automation than was built, kept off on purpose.
-- **There is no search index.** Finding something means scanning. This is the largest
-  open item.
+- **Search has to be set up by hand, and the first build is slow.** The index works and
+  is wired in, but no setup step installs it yet, and embedding a vault of about 1,100 notes
+  locally takes 30–90 minutes on a laptop. Without it, the OS falls back to grep.
 - **Learning is human-gated, and new.** A retro pass reads a session's own transcript
   rather than its summary of itself, and routes what it finds: a fact about a tool into
   that tool's integration file, a workflow step into a skill, a mechanisable rule into a
@@ -251,16 +259,16 @@ because these are design decisions, not a backlog of oversights.
 Direction rather than plan — no dates, no ordering, and the detailed roadmap stays
 private because its reasoning is entangled with one person's circumstances.
 
-- **A local model tier for bulk vault work.** Mechanical relabelling across hundreds
-  of notes, human-gated per batch and snapshotted in git. Running it on a local model
-  *dissolves* the privacy blocker rather than working around it — nothing leaves the
-  machine, so the sensitivity question and the cost question land on the same answer.
-- **A sensitivity boundary enforced at the tool layer.** The obvious design does not
-  work, which is the interesting part: a `sensitive: true` flag in frontmatter cannot
-  gate anything, because a read returns frontmatter and body atomically — by the time
-  the flag is visible, the body is already in context. Enforcement has to sit where
-  the read happens.
-- **A search index**, which is what makes the vault queryable instead of scannable.
+- **A vault health check.** The first bulk pass (a `description` on every note, see
+  [Note metadata](#note-metadata-descriptions-and-sensitivity)) worked. The next one is
+  read-only: broken links, orphans, likely duplicates, drifted tags, descriptions gone stale,
+  and frontmatter that doesn't parse. Detection is a script; only fixes need a model, and
+  every fix needs a yes.
+- **Closing the gaps in the sensitivity boundary.** Labels exist and the Read gate asks
+  before opening a labelled note. Grep and shell reads still go around it, because a
+  shell command's target is a string no hook can read reliably.
+- **Search in the setup flow**, plus an optional cloud embedder for faster builds that
+  skips private and secret notes by construction.
 - **A way to test behaviour that lives in prose.** The learning loop stays human-gated
   precisely because nothing can yet catch a behavioural regression automatically: a
   capable agent's failure mode is not an error, it is a plausible artifact. Rules that
@@ -274,6 +282,7 @@ private because its reasoning is entangled with one person's circumstances.
 - **git** installed (`git --version`).
 - **`jq`** at `/usr/bin/jq` — the hooks parse their input with it. Shipped with recent macOS; `install.sh` checks and fails loudly if it is missing, because the hooks fail *open* and a missing `jq` would silently stop the safety gates enforcing.
 - An **Obsidian vault** that is not itself a git repo — `_AI/` becomes its own repo inside it, and the vault stays plain-local.
+- *Optional, for [vault search](#vault-search):* **`uv`** and **Ollama** with the `bge-m3` model.
 - A **Claude account** you are signed in to (`claude auth status`), if you want account connectors for mail/calendar/tasks — see [Connectors](#connectors).
 
 ### Obsidian plugins — none required, several assumed
@@ -420,6 +429,130 @@ tools are account connectors**, which follow your account onto every surface.
 A server registered with the default `local` scope is bound to the one directory
 it was added in and will not follow you; use `--scope user` if you want it
 everywhere.
+
+## Note metadata: descriptions and sensitivity
+
+Two frontmatter fields carry most of the routing. Both are conventions in
+`maps/vault-map.md`, so the `obsidian` skill applies them whenever it creates or edits a note.
+
+**`description`**: one plain-English sentence of 15–30 words, even for a note in another
+language, saying what the note is *for* and what it holds. An agent or the search index
+can decide whether to open a note from this line alone, which is the token saving. It is
+not a summary. Notes whose filenames already route them (weekly notes, transcripts) go
+without one. A sensitive note gets a neutral description that names its kind and never its
+content: *"Private log on health."*
+
+**`sensitivity`**: `private` or `secret`; no field means normal. **It labels; it doesn't
+hide.** Hiding private notes would also make them unsearchable, and they are often exactly
+what you want to find. So a labelled note stays indexed and readable, and:
+
+- `guard-sensitive-read.sh` **asks** before a Read of it; it never denies. Opt a session in
+  with `AIOS_INCLUDE_PRIVATE=1`.
+- bulk jobs send it to a **local** model only, enforced in the script (see below).
+- the search index returns it as a pointer (path, title, description), not text. Credential
+  and ID-number lines are redacted in **every** note before indexing; `secret` (credentials,
+  account numbers) also loses long tokens, and stays a pointer even for an opted-in session.
+
+Whole folders get a label in `config/sensitivity.local` (`Periodic notes/* = private`) instead
+of note by note; the stricter of folder and frontmatter label wins. **Known gap:** Grep and
+shell reads bypass the gate.
+
+### Backfilling existing notes
+
+Three scripts, run from `_AI/`, with paths relative to the vault. Proposing never writes a
+note, and applying never runs without a dry run first.
+
+```bash
+# 1. notes without a description
+mkdir -p tmp/polish && (cd .. && grep -L '^description:' _NOTES/*.md) > tmp/polish/todo.txt
+# 2. propose: Haiku for normal notes; labelled notes switch to the local model by themselves
+python3 tools/frontmatter-polish/propose.py --backend claude --model haiku \
+  --out tmp/polish/run.jsonl < tmp/polish/todo.txt
+# 3. review side by side (several runs become columns)
+python3 tools/frontmatter-polish/review.py tmp/polish/run.jsonl > tmp/polish/review.md
+# 4. apply only these keys: dry run, then for real
+python3 tools/frontmatter-set.py --from-jsonl tmp/polish/run.jsonl \
+  --keys description,language --reason "frontmatter polish" --dry-run
+```
+
+- **`propose.py`** has two backends: `ollama` (default, needs a local model such as
+  `qwen3.5:9b`) and `claude` (the `claude` CLI in print mode, on your subscription login).
+  A note labelled private or secret always goes to the local model (`POLISH_LOCAL_MODEL`),
+  and it gets a template description built from fixed word lists. In the pilot, a
+  free-text prompt leaked diary content even though the prompt forbade it. Output is
+  resumable JSONL; descriptions that break the length or one-sentence rule are retried
+  twice, then flagged. Filename prefixes listed in `vault-map.md` (`XY_` = an employer)
+  go into the prompt, because a model will otherwise guess.
+- **`frontmatter-set.py`** is the only writer. It quotes YAML-unsafe values, refuses
+  read-only zones and Templater frontmatter, checks the body is byte-identical afterwards,
+  snapshots every note to `tmp/`, and logs each change to `history/file-log.md`. Re-running
+  is a no-op. It also sets one key on many notes:
+  `frontmatter-set.py --key sensitivity --value private --reason "…" < paths`.
+
+**Cost and speed, from one real run** (843 notes on an M2 MacBook Air): Haiku took about
+4 s per note, so 742 notes in about 12 minutes on four parallel shards. The local 9B model
+took about 46 s per note for the 101 private ones. Two things to know: a plain `claude -p`
+started inside the vault loads the whole OS, about 45k tokens per call, so the script runs it
+with no tools, settings or MCP from your home directory, at under 1k tokens. And a stale
+`ANTHROPIC_API_KEY` in your environment overrides the subscription login, so the script
+drops it.
+
+**Which notes are done?** The frontmatter is its own index: a note without `description`
+is still to do, which is a grep or an Obsidian Bases filter away. No separate tracking file.
+
+## Vault search
+
+`tools/vault-search.py` answers "which note was about…" by meaning, not by string. A
+question in English finds a German note, and a paraphrase finds a note that never uses
+the words. It is one Python file with three commands:
+
+```bash
+tools/vault-search.py index            # incremental: only notes whose content changed
+tools/vault-search.py search "train discount card" [-k 8] [--json]
+tools/vault-search.py status           # notes, chunks, model, last update
+```
+
+**How it works.** Notes up to about 550 tokens become one chunk. Longer ones are split at
+their H1–H3 headings, then at paragraphs, to about 450 tokens with a small overlap. Every
+chunk is prefixed with `title — description · tags › heading path`, so a fragment like
+"decided against it" still carries its context. A local model (`bge-m3` via Ollama,
+multilingual, 1024 dimensions) embeds the chunks. Vectors (`sqlite-vec`, exact cosine) and
+a keyword index (SQLite FTS5, BM25) live in one file. A query runs both, fuses the rankings
+with weighted Reciprocal Rank Fusion, and returns notes, each with its best section.
+Vectors catch meaning, and keywords catch names and IDs that vectors blur.
+
+**Did it earn its place?** It was built only after an eval against the grep baseline: 24
+known-item questions, with each target note picked *before* its question was written.
+The right note landed in the top five for 18 questions, against 14 for grep plus filename
+matching. The gain is in paraphrase, cross-language and flooded queries ("money I lent"
+matches 176 files). Note that the set is small, one person wrote both the questions and
+the grep terms, and grep got a single try where an agent would retry.
+
+**Privacy.** Embedding is local by default, so no note leaves the machine. Sensitivity
+labels travel with every chunk: private and secret hits come back as pointers, and text
+that looks like credentials or ID numbers is redacted before storage and again on output.
+Third-party folders (`external` in the config) are flagged so their snippets are read as
+data, never instructions.
+
+**How the OS uses it.** One rule in `CLAUDE.md` and a section in the `obsidian` skill send
+meaning-questions to the search first. Grep stays the tool for exact strings. A hook adds
+a one-line reminder the first time a session greps the notes, and a session-start hook
+refreshes the index in the background, which usually takes seconds.
+
+**Setting it up.** Needs [`uv`](https://docs.astral.sh/uv/) (it runs the script and
+fetches `sqlite-vec`; a Python built without SQLite extension support cannot load it) and
+[Ollama](https://ollama.com):
+
+```bash
+ollama pull bge-m3
+tools/vault-search.py index            # first build: 30–90 min in the background on a laptop
+tools/vault-search.py search "something you wrote about once"
+```
+
+Folders to skip, folders to flag as external, and the model live in
+`config/search-index.local` (`install.sh` creates it, all comments; defaults skip `_AI/`,
+archives, attachments and templates, and flag nothing as external). With `embedder = none` the index is keywords only: no model needed, but no
+paraphrase either. Run the script directly, never as `python3 vault-search.py`.
 
 ## Phone mirror (optional)
 

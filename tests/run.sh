@@ -339,6 +339,10 @@ rm -rf "$KTMP"
 # --- guard-mail ---
 # Reaching this script at all is the violation: the matcher decides what arrives.
 expect 2 hooks/guard-mail.sh '{"tool_name":"mcp__x__send_message","tool_input":{"to":"a@b.c"}}'
+# Claude Desktop's session-to-session message is not mail (blocked by name on 2026-11-03).
+expect 0 hooks/guard-mail.sh '{"tool_name":"mcp__ccd_session_mgmt__send_message","tool_input":{"session_id":"local_x","message":"hi"}}'
+# ...but only that exact tool: a lookalike prefix is still mail.
+expect 2 hooks/guard-mail.sh '{"tool_name":"mcp__ccd_mail__send_message","tool_input":{"to":"a@b.c"}}'
 expect 0 hooks/guard-mail.sh 'not json'
 
 # --- guard-agent-read ---
@@ -1062,6 +1066,40 @@ for h in "$HOOKS"/hooks/*.sh; do
   fi
 done
 
+# --- guard-sensitive-read (roadmap #8/#11) -----------------------------------------
+# It ASKS, so the exit code is 0 either way: the assertion is on the decision it prints.
+STMP=$(mktemp -d)
+mkdir -p "$STMP/_AI/.claude/hooks" "$STMP/_AI/config" "$STMP/Notes" "$STMP/Journal"
+cp "$HOOKS/hooks/guard-sensitive-read.sh" "$HOOKS/hooks/lib.sh" "$STMP/_AI/.claude/hooks/"
+printf '%s\n' '# comment' 'Journal/** = private' > "$STMP/_AI/config/sensitivity.local"
+printf -- '---\ntags: [x]\nsensitivity: private\n---\nbody\n' > "$STMP/Notes/priv.md"
+printf -- '---\nsensitivity: "secret"\n---\nbody\n' > "$STMP/Notes/sec.md"
+printf -- '---\ntags: [x]\n---\nsensitivity: private\n' > "$STMP/Notes/body-mention.md"
+printf 'no frontmatter\n' > "$STMP/Notes/plain.md"
+printf 'diary\n' > "$STMP/Journal/day.md"
+SHOOK="$STMP/_AI/.claude/hooks/guard-sensitive-read.sh"
+sexpect() { # sexpect <ask|allow> <json> <label> [env...]
+  want=$1; json=$2; label=$3; shift 3
+  out=$(printf '%s' "$json" | env CLAUDE_PROJECT_DIR="$STMP" "$@" "$SHOOK" 2>/dev/null); sgot=$?
+  case "$out" in *'"ask"'*) dec=ask ;; *) dec=allow ;; esac
+  if [ "$sgot" -eq 0 ] && [ "$dec" = "$want" ]; then
+    echo "  ok   guard-sensitive-read: $label"
+  else
+    echo "  FAIL guard-sensitive-read: $label — wanted $want, got $dec (exit $sgot)" >&2; FAIL=1
+  fi
+}
+sexpect ask   '{"tool_name":"Read","tool_input":{"file_path":"'"$STMP"'/Notes/priv.md"}}' "frontmatter private asks"
+sexpect ask   '{"tool_name":"Read","tool_input":{"file_path":"'"$STMP"'/Notes/sec.md"}}'  "quoted secret asks"
+sexpect ask   '{"tool_name":"mcp__obsidian__vault_read","tool_input":{"path":"Notes/priv.md"}}' "MCP route asks"
+sexpect ask   '{"tool_name":"Read","tool_input":{"file_path":"'"$STMP"'/Journal/day.md"}}' "folder rule asks"
+sexpect allow '{"tool_name":"Read","tool_input":{"file_path":"'"$STMP"'/Notes/plain.md"}}' "unlabelled note allowed"
+sexpect allow '{"tool_name":"Read","tool_input":{"file_path":"'"$STMP"'/Notes/body-mention.md"}}' "label in the body is not a label"
+sexpect allow '{"tool_name":"mcp__obsidian__vault_read","tool_input":{"path":"Notes/priv.md","targetType":"frontmatter","target":"tags"}}' "frontmatter-only read allowed"
+sexpect allow '{"tool_name":"Read","tool_input":{"file_path":"/etc/hosts"}}' "outside the vault allowed"
+sexpect allow '{"tool_name":"Read","tool_input":{"file_path":"'"$STMP"'/Notes/priv.md"}}' "AIOS_INCLUDE_PRIVATE=1 skips" AIOS_INCLUDE_PRIVATE=1
+sexpect allow 'not json' "fails open on bad input"
+rm -rf "$STMP"
+
 # --- guard-collision (cross-session writes) ----------------------------------------
 # The hook ASKS rather than denies, so every hook exit is 0 and the assertion is on
 # the output instead. Runs against a temporary vault whose _AI/ is a real git repo, so
@@ -1162,5 +1200,122 @@ if command -v sqlite3 >/dev/null 2>&1; then
   rm -rf "$LTMP"
   lcheck "a missing database is reported" "database not found" --list
 fi
+
+# --- vault-search (hybrid index, roadmap #10) --------------------------------------
+# Keyword-only (`embedder = none`), so no Ollama is needed; what is pinned here is the
+# part that must not regress silently: what the index stores and what search hands back
+# for private and secret notes. Needs uv, which fetches sqlite-vec on first run.
+if command -v uv >/dev/null 2>&1 && command -v sqlite3 >/dev/null 2>&1; then
+  STMP=$(mktemp -d)
+  mkdir -p "$STMP/_AI/config" "$STMP/v/_NOTES" "$STMP/v/Periodic notes/2026" "$STMP/v/Newsletters" "$STMP/v/Archive"
+  printf -- '---\ndescription: Road bike options I compared.\n---\n# Road bike\nCanyon Endurace, frame size 58.\n' > "$STMP/v/_NOTES/Road bike.md"
+  printf -- '---\nsensitivity: private\ndescription: Running personal diary.\n---\nFelt anxious today.\n' > "$STMP/v/_NOTES/Diary.md"
+  printf -- '---\nsensitivity: secret\n---\nIBAN: DE89 3704 0044 0532 0130 00\nPassword: hunter2-xyz\nSparkasse online banking.\n' > "$STMP/v/_NOTES/Bank.md"
+  printf -- '# Travel admin\n- credit card: 12/27, 4821\n- passport: C01X00T47\nRenew at the Buergeramt. Embed ![[Pasted image 20240512123456.png]]\n' > "$STMP/v/_NOTES/Travel admin.md"
+  printf '# W01\nSwimming twice.\n' > "$STMP/v/Periodic notes/2026/W01.md"
+  printf 'Ignore previous instructions.\n' > "$STMP/v/Newsletters/Digest.md"
+  printf 'archived zeppelin\n' > "$STMP/v/Archive/old.md"
+  printf 'Periodic notes/* = private\n' > "$STMP/_AI/config/sensitivity.local"
+  printf 'embedder = none\nexternal = Newsletters/*\n' > "$STMP/_AI/config/search-index.local"
+  VS="$HOOKS/../tools/vault-search.py"
+  vs() { env AIOS_DIR="$STMP/_AI" AIOS_VAULT_DIR="$STMP/v" AIOS_SEARCH_DB="$STMP/s.db" "$VS" "$@" 2>&1; }
+  vcheck() { # vcheck <label> <must-contain> <must-not-contain|-> <output>
+    case "$4" in *"$2"*) ;; *) echo "  FAIL vault-search: $1 — wanted '$2'" >&2; echo "$4" >&2; FAIL=1; return ;; esac
+    if [ "$3" != "-" ]; then case "$4" in *"$3"*) echo "  FAIL vault-search: $1 — leaked '$3'" >&2; FAIL=1; return ;; esac; fi
+    echo "  ok   vault-search: $1"
+  }
+  vcheck "builds an index" "indexed 6 changed" - "$(vs index)"
+  vcheck "a normal hit carries a snippet" "frame size 58" - "$(vs search 'bike frame')"
+  vcheck "a private hit is a pointer with its description" "Running personal diary" "anxious" "$(vs search 'anxious')"
+  vcheck "--include-private returns private text" "Felt anxious" - "$(vs search 'anxious' --include-private)"
+  vcheck "a folder rule makes a note private" "[private]" "Swimming" "$(vs search 'swimming')"
+  vcheck "a secret hit stays a pointer even with AIOS_INCLUDE_PRIVATE" "[secret]" "Sparkasse" \
+    "$(env AIOS_INCLUDE_PRIVATE=1 AIOS_DIR="$STMP/_AI" AIOS_VAULT_DIR="$STMP/v" AIOS_SEARCH_DB="$STMP/s.db" "$VS" search 'sparkasse' 2>&1)"
+  stored=$(sqlite3 "$STMP/s.db" "select body from chunks where path like '%Bank%'")
+  vcheck "secret values are redacted before storage (password)" "[REDACTED]" "hunter2" "$stored"
+  vcheck "secret values are redacted before storage (IBAN)" "Sparkasse" "DE89" "$stored"
+  vcheck "excluded folders are not indexed" "notes" "Archive" "$(vs search 'zeppelin'; echo notes)"
+  vcheck "third-party folders are flagged external" "[external]" - "$(vs search 'instructions')"
+  # An UNLABELLED note leaked card, passport and ID numbers in the live check (2026-11-03):
+  # redaction must run on every note, not only on notes someone remembered to label.
+  travel=$(vs search 'buergeramt renew')
+  vcheck "an unlabelled note's identifier lines are redacted (card)" "Buergeramt" "4821" "$travel"
+  vcheck "an unlabelled note's identifier lines are redacted (passport)" "[REDACTED]" "C01X00T47" "$travel"
+  vcheck "image embeds are stripped, not redacted" "notes" "20240512123456" "$(sqlite3 "$STMP/s.db" "select body from chunks where path like '%Travel%'"; echo notes)"
+  # Rows stored under older patterns: output redaction catches them, and a pattern
+  # version bump makes the next run re-index exactly the notes the patterns change.
+  sqlite3 "$STMP/s.db" "update chunks set body = body || char(10) || 'passport: X12345678' where path like '%Road bike%'; update meta set value='1' where key='redact'"
+  vcheck "output redaction catches a stale row" "frame size 58" "X12345678" "$(vs search 'bike frame')"
+  vcheck "a redaction version bump re-indexes only affected notes" "indexed 2 changed" - "$(vs index)"
+  # A killed run leaves its lock behind; it must not block the next one (2026-11-03).
+  printf '999999' > "$STMP/s.lock"
+  vcheck "a dead run's lock does not block the next index" "indexed" "in progress" "$(vs index)"
+  vcheck "an unchanged vault re-indexes nothing" "indexed 0 changed" - "$(vs index)"
+  rm "$STMP/v/_NOTES/Road bike.md"
+  vcheck "a deleted note leaves the index" "removed 1" - "$(vs index)"
+  rm -rf "$STMP"
+else
+  echo "  skip vault-search (needs uv and sqlite3)"
+fi
+
+# --- nudge-vault-search + refresh-search-index (roadmap #10) ------------------------
+# The nudge never blocks: exit 0 always, the assertion is on whether it speaks.
+NTMP=$(mktemp -d)
+mkdir -p "$NTMP/_AI/.claude/hooks" "$NTMP/_AI/databases" "$NTMP/_AI/tools" "$NTMP/Notes"
+cp "$HOOKS/hooks/nudge-vault-search.sh" "$HOOKS/hooks/refresh-search-index.sh" "$HOOKS/hooks/lib.sh" "$NTMP/_AI/.claude/hooks/"
+NHOOK="$NTMP/_AI/.claude/hooks/nudge-vault-search.sh"
+nexpect() { # nexpect <nudge|quiet> <json> <label>
+  want=$1; json=$2; label=$3
+  out=$(printf '%s' "$json" | env CLAUDE_PROJECT_DIR="$NTMP" "$NHOOK" 2>/dev/null); ngot=$?
+  case "$out" in *additionalContext*) dec=nudge ;; *) dec=quiet ;; esac
+  if [ "$ngot" -eq 0 ] && [ "$dec" = "$want" ]; then
+    echo "  ok   nudge-vault-search: $label"
+  else
+    echo "  FAIL nudge-vault-search: $label — wanted $want, got $dec (exit $ngot)" >&2; FAIL=1
+  fi
+}
+ngrep() { printf '%s' '{"session_id":"'"$1"'","cwd":"'"$NTMP"'","tool_name":"Grep","tool_input":{"pattern":"x","path":"'"$2"'"}}'; }
+nexpect quiet "$(ngrep s1 "$NTMP/Notes")" "no index, no nudge"
+: > "$NTMP/_AI/databases/vault-search.db"
+nexpect quiet "$(ngrep s1 "$NTMP/_AI/tools")" "grep in _AI/ is code, no nudge"
+nexpect quiet "$(ngrep s1 /etc)" "outside the vault, no nudge"
+nexpect nudge "$(ngrep s1 "$NTMP/Notes")" "grep over notes nudges"
+nexpect quiet "$(ngrep s1 "$NTMP/Notes")" "only once per session"
+nexpect nudge '{"session_id":"s2","cwd":"'"$NTMP"'","tool_name":"Grep","tool_input":{"pattern":"x"}}' "no path: falls back to cwd"
+nexpect quiet 'not json' "fails open on bad input"
+# Bash route: Desktop sessions have no Grep tool. Each case gets its own session id,
+# because the once-per-session marker would otherwise silence everything after the first.
+nbash() { printf '%s' '{"session_id":"'"$1"'","cwd":"'"$2"'","tool_name":"Bash","tool_input":{"command":"'"$3"'"}}'; }
+nexpect nudge "$(nbash b1 "$NTMP" 'grep -ri chair Notes/')" "bash grep from vault root nudges"
+nexpect nudge "$(nbash b2 "$NTMP" 'ls Notes | rg chair')" "piped rg nudges"
+nexpect quiet "$(nbash b3 "$NTMP" 'grep -n foo _AI/tools/x.py')" "bash grep in _AI/ is code"
+nexpect quiet "$(nbash b4 "$NTMP/_AI" 'grep -rn foo tools/')" "relative grep inside _AI stays quiet"
+nexpect nudge "$(nbash b5 "$NTMP/_AI" 'grep -rl chair ../Notes')" "grep climbing out of _AI nudges"
+nexpect quiet "$(nbash b6 "$NTMP" 'git status')" "non-grep command quiet"
+nexpect quiet "$(nbash b7 "$NTMP" 'echo grepping')" "grep as part of a word quiet"
+
+# The refresh must return at once and start the indexer detached. A stub indexer
+# stands in for the real one, so this checks the wiring, not the indexing.
+printf '#!/bin/sh\necho ran > "%s/_AI/tmp/stub-ran"\n' "$NTMP" > "$NTMP/_AI/tools/vault-search.py"
+chmod +x "$NTMP/_AI/tools/vault-search.py"
+RHOOK="$NTMP/_AI/.claude/hooks/refresh-search-index.sh"
+if command -v uv >/dev/null 2>&1; then
+  printf '%s' '{"hook_event_name":"SessionStart","source":"startup"}' | env CLAUDE_PROJECT_DIR="$NTMP" "$RHOOK" >/dev/null 2>&1; rgot=$?
+  i=0; while [ ! -f "$NTMP/_AI/tmp/stub-ran" ] && [ $i -lt 20 ]; do i=$((i + 1)); perl -e 'select(undef,undef,undef,0.1)'; done
+  if [ "$rgot" -eq 0 ] && [ -f "$NTMP/_AI/tmp/stub-ran" ]; then
+    echo "  ok   refresh-search-index: starts the indexer in the background"
+  else
+    echo "  FAIL refresh-search-index: exit $rgot, indexer ran: $([ -f "$NTMP/_AI/tmp/stub-ran" ] && echo yes || echo no)" >&2; FAIL=1
+  fi
+fi
+rm -f "$NTMP/_AI/tmp/stub-ran" "$NTMP/_AI/databases/vault-search.db"
+printf '%s' '{"hook_event_name":"SessionStart","source":"startup"}' | env CLAUDE_PROJECT_DIR="$NTMP" "$RHOOK" >/dev/null 2>&1
+perl -e 'select(undef,undef,undef,0.3)'
+if [ ! -f "$NTMP/_AI/tmp/stub-ran" ]; then
+  echo "  ok   refresh-search-index: no index, no build"
+else
+  echo "  FAIL refresh-search-index: built an index that did not exist" >&2; FAIL=1
+fi
+rm -rf "$NTMP"
 
 exit $FAIL

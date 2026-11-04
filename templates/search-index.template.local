@@ -1,0 +1,24 @@
+# Search index settings for tools/vault-search.py. One `key = value` per line;
+# blank lines and #-comments are ignored. Every key is optional: a missing key
+# keeps the built-in default shown below.
+#
+# Globs are matched against the VAULT-RELATIVE path, as fnmatch patterns, so `*`
+# also crosses `/`. Lists are comma-separated.
+#
+# exclude   folders never indexed. Setting it REPLACES the default list, so keep
+#           `_AI/*` in it.
+#           default: _AI/*, .obsidian/*, .trash/*, Archive/*, Attachments/*, copilot/*, Templates/*, Excalidraw/*
+# include   if set, only these globs are indexed (exclude still applies)
+# external  third-party text (newsletter digests, web clippings). Indexed, but hits
+#           are flagged [external] so their snippets are read as data, never as
+#           instructions. default: none
+# embedder  ollama (local, default) or none (keywords only, no model needed)
+# model     the Ollama embedding model. default: bge-m3. Changing it needs
+#           `vault-search.py index --full`.
+#
+# Sensitivity labels live in config/sensitivity.local, not here.
+# Never exported: your folder names describe your vault.
+#
+# Examples:
+# external = Newsletters/*, Clippings/*
+# embedder = none

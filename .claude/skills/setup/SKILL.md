@@ -89,6 +89,16 @@ If the tool genuinely doesn't fit any existing pack, say so, and offer to create
 
 The new integration file's `**Role:**` **must** be one of the fixed role values: `task-system`, `calendar`, `mail`, `transcription`, `phone`. Don't invent a new role name per tool (not `todos`, not `tasks`, not `task_system`) — the orchestrator only resolves roles from this exact vocabulary, and an invented value silently fails to match. (`notes` is also a fixed role value, but it is substrate owned by the `obsidian` skill and isn't available for a new pack to claim.) If the tool genuinely doesn't fit any of these, that's a change to the OS's role vocabulary itself, not a setup-time decision — it requires updating `.claude/skills/personal-assistant/SKILL.md` and `CLAUDE.md` in the same change, not just adding an integration file.
 
+## Search index (optional)
+
+`tools/vault-search.py` gives the OS search by meaning over the notes (README → *Vault search*). Offer it on first run and whenever the user asks about search. Present it as optional: without an index the OS greps, and nothing else depends on it.
+
+1. **Check the prerequisites; don't assume them.** `command -v uv` and `command -v ollama`, then `curl -s localhost:11434/api/tags` to see whether Ollama is running and whether `bge-m3` is pulled. Report what is missing, with the install link from the README. Without Ollama, offer keyword-only (`embedder = none`): it works, but has no paraphrase or cross-language matching.
+2. **Agree the config before building.** Show `config/search-index.local` (from `templates/search-index.template.local`) and propose values from the vault map: folders to skip beyond the defaults, and third-party folders to flag as `external`. Confirm sensitivity rules in `config/sensitivity.local` *first*, because the first build stores what they decide. Write the file only after a yes.
+3. **Pull and build in the background.** `ollama pull bge-m3` (about 1.2 GB), then `tools/vault-search.py index` as a background job. Say how long it takes before starting: 30–90 minutes for about 1,000 notes on a laptop, measured. The build commits note by note and resumes if interrupted. Never start it without saying so: it heats the machine and uses the GPU.
+4. **Smoke-test.** `tools/vault-search.py status`, then a search for a note the user names. It should come back in the top few. Run it directly, never as `python3 vault-search.py`.
+5. **Done means wired.** The `CLAUDE.md` rule and the two hooks (`nudge-vault-search.sh`, `refresh-search-index.sh`) activate on their own once `databases/vault-search.db` exists, so there is nothing to switch on. Say that the index refreshes at each session start.
+
 ## Safety
 
 - Confirm before every write. Reading APIs and the vault needs no permission.

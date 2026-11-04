@@ -165,8 +165,10 @@ archive**, because nobody is there to say yes.
 - **"Log X"** → create or update the company's note in the default notes folder (`vault-map.md`) with the Job Database
   frontmatter (`type: opportunity`, `track`, `cycle`, `stage: idea`, `source: job alert`,
   `company`, `role`, `role_type` = the Roles row, `location`, `link` if the line had one,
-  `next_step: read the posting`), `up:` the search page, `tags: [career]`. If the company note
-  exists, add the role under a dated line instead of a second note. Log the write.
+  `next_step: read the posting`), `up:` the search page, `tags: [career]`. Double-quote any
+  value that contains `: ` or starts with a YAML special character; unquoted, it breaks the
+  frontmatter. If the company note exists, add the role under a dated line instead of a
+  second note. Log the write.
 - **Monday review:** if asked from the weekly review, run the digest (or read the note the
   scheduled run wrote) and return one line ("Job alerts: 3 to look at — Acme Product
   Lead, …") plus the note link, then step 6.

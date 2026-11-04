@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.5.0 — 2026-11-04
+
+- Record the v0.4.0 release
+- description: frontmatter convention (roadmap item 11 phase 1)
+- Sensitivity labels: label, don't block (roadmap item 8, item 11)
+- frontmatter-polish: propose and review scripts, pilot run (roadmap item 11)
+- vault-search: hybrid semantic search over the vault (roadmap item 10)
+- vault-search: nudge on Bash grep too, hint when run via python3
+- frontmatter polish: JSONL apply mode, subscription auth, prefix glossary
+- job-digest: quote frontmatter values that contain ': '
+- README: note metadata section (description, sensitivity, frontmatter-polish); refresh Where it's going
+- vault-search: redact every note, not only secret ones; README search section
+- propose.py: generic wording in the prefix-glossary docstring
+- vault-search: external folders move to config; setup step for the index
+- vault-search: a killed run's lock no longer blocks indexing for two hours
+- guard-mail: exempt Claude Desktop's session-to-session send_message by exact name
+
 ## v0.4.0 — 2026-11-03
 
 > **Upgrading from v0.3.0: re-run `bash _AI/setup/install.sh` once after pulling.** This

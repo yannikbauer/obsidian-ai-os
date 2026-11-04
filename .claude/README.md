@@ -73,6 +73,32 @@ Read outside that directory (or containing `..`) is denied. Every other caller p
 untouched. Fixtures prove the logic; whether the harness sends `agent_type` has to be
 proven live, from a session started after the change (ledger L033).
 
+## Private notes: `guard-sensitive-read.sh`
+
+A note marked `sensitivity: private|secret` in its frontmatter, or matched by a folder
+rule in `config/sensitivity.local`, stays readable: the hook **asks** before `Read` or
+`vault_read` opens it, and never denies. The label is there so private text does not
+reach a cloud model unwatched (a batch job, a digest, a search for something else). It
+is not there to keep the owner out. The hook reads the frontmatter itself, so nothing of
+the note enters the context before the yes. `AIOS_INCLUDE_PRIVATE=1` in the session's
+environment skips the question; it is an env var because the model cannot set it from
+inside the session. Grep and a Bash `cat` still read past it: this closes the routine
+route, not every route.
+
+## Search over grep: `nudge-vault-search.sh`, `refresh-search-index.sh`
+
+Two hooks that support the vault search index (`tools/vault-search.py`, roadmap #10),
+neither of which blocks anything. **`nudge-vault-search.sh`** (PreToolUse, Grep and Bash)
+adds one line of context the first time in a session that the model greps the notes,
+pointing it at `vault-search.py search`. Bash is matched too because Claude Desktop
+sessions have no Grep tool and grep through the shell; there the test is a coarse
+string match (grep/rg in the command, not aimed at `_AI/`). It stays silent for greps in
+`_AI/`, outside the vault, or when no index exists. It nudges and never denies, because grep is still the right
+tool for an exact string. **`refresh-search-index.sh`** (SessionStart, `startup`) starts
+an incremental index run in the background and returns at once. It never builds a first
+index: that takes 30–90 minutes and belongs to setup. If Ollama is down, the old index
+stays in place and search warns that it is stale.
+
 ## Concurrent sessions: `guard-collision.sh`
 
 Several sessions can run against one vault and one `_AI/` tree. Claude Code already
