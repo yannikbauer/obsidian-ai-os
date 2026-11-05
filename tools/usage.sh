@@ -44,20 +44,30 @@ done
 # and a hardcoded username is exactly what the leak check exists to stop.
 HOME_PREFIX="$(printf '%s' "$HOME" | tr '/' '-')-"
 
-# One compact record per assistant turn, with the project name injected.
+# One compact record per API response, with the project name injected.
+#
+# DEDUPE (fixed 2026-11-04): Claude Code writes one transcript line per content block
+# (thinking, text, each tool_use), and every one of those lines repeats the same
+# message.usage. Summing lines counted a response 2–11 times and overstated every
+# figure roughly 2.3×. Records are keyed by message.id + requestId and kept once —
+# which also drops copies a resumed session carries into a new file.
+#
+# SUBAGENTS: their transcripts live in subfolders (<session>/subagents/*.jsonl) and
+# count against the same account limits, so the scan recurses.
 collect() {
   for pdir in "$DIR"/*/; do
     [ -d "$pdir" ] || continue
     proj=$(basename "$pdir")
     if [ -n "$PROJECT" ] && [ "$proj" != "$PROJECT" ]; then continue; fi
-    for f in "$pdir"*.jsonl; do
-      [ -f "$f" ] || continue
-      /usr/bin/jq -c --arg proj "$proj" \
+    find "$pdir" -name '*.jsonl' -type f | while IFS= read -r f; do
+      /usr/bin/jq -c --arg proj "$proj" --arg f "$f" \
         --argjson wi "$W_IN" --argjson wc "$W_CACHE_CREATE" \
         --argjson wr "$W_CACHE_READ" --argjson wo "$W_OUT" '
         select(.type=="assistant")
         | (.message.usage // empty) as $u
-        | { proj: $proj,
+        | { k: (if .message.id then "\(.message.id)|\(.requestId // "")"
+                else "\($f):\(input_line_number)" end),
+            proj: $proj,
             sess: (.sessionId // "unknown"),
             t: ((.timestamp // "1970-01-01T00:00:00Z")
                  | sub("\\.[0-9]+Z$";"Z") | (fromdateiso8601? // 0)),
@@ -93,7 +103,7 @@ def peak($win):
   peak_5h:        (peak(18000) | round),
   peak_24h:       (peak(86400) | round) }'
 
-ROWS=$(collect)
+ROWS=$(collect | /usr/bin/jq -c -s 'unique_by(.k) | .[]')
 
 if [ "$MODE" = "json" ]; then
   printf '%s\n' "$ROWS" | /usr/bin/jq -s "$AGG"

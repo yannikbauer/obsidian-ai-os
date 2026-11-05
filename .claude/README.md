@@ -99,6 +99,16 @@ an incremental index run in the background and returns at once. It never builds 
 index: that takes 30–90 minutes and belongs to setup. If Ollama is down, the old index
 stays in place and search warns that it is stale.
 
+## Housekeeping: `prune-session-state.sh`
+
+**`prune-session-state.sh`** (SessionStart, `startup`) moves hook markers in `tmp/`
+(`writes-`, `denies-`, `collision-acks-`, `nudged-search-`, `.retro-asked-`,
+`.filelog-blocked-`) that no session has touched for 14 days (`AIOS_STATE_DAYS`) to the
+macOS Trash. Age, not session end, is the signal: Stop fires every turn, and a resumed
+session needs its markers again. It never uses `rm`; without `/usr/bin/trash` it does
+nothing, and `vault-health.py tmp` still lists the markers. Everything else in `tmp/` is
+the `vault-maintenance` skill's housekeeping, on the user's word.
+
 ## Concurrent sessions: `guard-collision.sh`
 
 Several sessions can run against one vault and one `_AI/` tree. Claude Code already

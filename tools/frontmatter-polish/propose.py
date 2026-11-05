@@ -190,7 +190,8 @@ def main():
 
     done = set()
     if os.path.exists(a.out):
-        done = {json.loads(l)["path"] for l in open(a.out) if l.strip()}
+        rows = [json.loads(l) for l in open(a.out) if l.strip()]
+        done = {r["path"] for r in rows if "error" not in r}  # a failed row (Ollama down) is retried next run
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "a", encoding="utf-8") as o:
         for rel in (l.strip() for l in sys.stdin):

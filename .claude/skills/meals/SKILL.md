@@ -44,6 +44,9 @@ Read the plan page fresh. For each item under this week:
   - Ask for a `rating` (1–5) only if the user volunteers an opinion; never make it a chore.
 - **Unticked** → ask: carry to this week, move to next weeks, or drop. Don't guess.
 
+After writing recipe notes (a `last_cooked`, a stub), say once that the chef's phone copy of the
+recipe index (if the map names one) is stale for those rows; its next linked session refreshes them.
+
 Write recipe changes as frontmatter-only edits, through the `notes` role's preferred route,
 after the user confirms the list. Log each one in `_AI/history/file-log.md`.
 

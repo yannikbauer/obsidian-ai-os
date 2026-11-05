@@ -16,6 +16,7 @@ This is a **map** (structural orientation), like `vault-map.md`. Personal but no
 | **Completed record** | **Task system** (its done archive) | the weekly note's "tasks done" |
 | **Meaning, reflection, knowledge, goals** | **Notes** (the vault) | — |
 | **External triggers** | **Mail** (and later, messaging) | task-system items |
+| **Advisor prompts and what advisors know** | **Notes** (each advisor's prompt note and working notes, `maps/advisors-map.md`) | the Claude project's stub, fallback copy and phone docs · project memory is only a phone inbox, emptied into the vault |
 
 **Read it as a conflict-resolution rule, not a filing scheme.** Its only job is to answer
 *"these two disagree — which is right?"* without a conversation each time. If a row never

@@ -99,6 +99,10 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PROJECT_DIR}/_AI/.claude/hooks/refresh-search-index.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/_AI/.claude/hooks/prune-session-state.sh\""
           }
         ]
       }

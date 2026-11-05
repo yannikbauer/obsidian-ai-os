@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.0 — 2026-11-05
+
+- **Advisors: Claude projects as front-ends to the vault.** A new `advisors` skill runs long-lived advisor personas (a coach, a chef, a financial advisor, …) whose prompt lives in one vault note. The Claude Desktop project keeps only a generated stub, a fallback copy and phone copies, and project memory becomes a phone inbox the next linked session empties into the vault. New: `tools/advisor-stub.py`, `templates/advisor-prompt.template.md`, `maps/advisors-map.md` (scaffolded), a README section, and an authority row in the workflow-map template.
+- **Daily log.** A new `daily-log` skill turns a spoken daily check-in into one structured daily note whose frontmatter is the data, with optional wearable fields. `tools/daily-log-stats.py` computes weekly lines and group comparisons the same way every time; which fields are sensitive or pre-registered is configured in your own map, not in the script, and `--no-sensitive` fails closed without that list.
+- **Vault maintenance.** A new `vault-maintenance` skill and `tools/vault-health.py`: a read-only weekly report on frontmatter that does not parse, missing descriptions, broken links, orphans, tag variants and likely duplicates, plus housekeeping of `_AI/tmp/`. Fixes are proposed and applied only on your word. A SessionStart hook moves stale hook markers to the Trash instead of deleting them.
+- **Smaller changes.** The newsletter digest drops its Scout subagent (it found nothing in three real runs); `usage.sh` counts API responses once and includes subagents; the obsidian skill mentions private search hits it left unopened; snapshot paths are spelled out as `_AI/tmp/`.
+
 ## v0.5.0 — 2026-11-04
 
 - Record the v0.4.0 release

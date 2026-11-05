@@ -50,6 +50,10 @@ overstate the steady state.
 single project can be a fraction of the true figure. `--project <name>` narrows deliberately
 — say which scope a number came from whenever it could be mistaken for the other.
 
+**Readings before 2026-11-04 are about 2.3× too high.** The script counted transcript lines,
+not API responses (see the correction in `history/usage-baseline.md`). Never compare a
+current number against an older block without saying so.
+
 ## Related
 
 - `tools/usage.sh --json` — machine-readable totals, for scripting or assertions.

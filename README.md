@@ -115,6 +115,7 @@ written at install time instead of committed.
     │   ├── clickup-replace-allow.local  doc pages the AI may rewrite whole
     │   ├── sensitivity.local       folders whose notes are private or secret
     │   ├── search-index.local      what the search index skips, and which folders are third-party
+    │   ├── vault-health.local      what the health check skips, and its duplicate threshold
     │   └── README.md               what reads each knob, and how each one degrades
     │
     ├── maps/                   orientation — structure, not content            personal
@@ -135,16 +136,18 @@ written at install time instead of committed.
     │   ├── .gitignore            a whitelist — other programs write here too
     │   ├── agents/               subagents; symlinked from the vault root
     │   │   ├── newsletter-reader.md  reads newsletter threads + its own saved output, nothing else
-    │   │   ├── job-mail-reader.md    same shape, for job-alert mails
-    │   │   └── scout-researcher.md   searches + fetches the web for the digest's Scout
+    │   │   └── job-mail-reader.md    same shape, for job-alert mails
     │   └── skills/               capabilities, loaded on demand
     │       ├── personal-assistant/   the orchestrator — cross-tool workflows
     │       ├── obsidian/             notes: the always-present substrate
+    │       ├── vault-maintenance/    weekly health report on the vault, and fixes on confirmation
     │       ├── calendar/  clickup/  mail/    one per tool role
     │       ├── transcripts/          meeting & memo transcripts: triage, distill, recall
     │       ├── newsletter-digest/    weekly cross-source digest of newsletters
     │       ├── job-digest/           job-alert mails scored against the search, plus a market log
     │       ├── meals/                meal-plan logistics: cooked-tracking, calendar slots, suggestions
+    │       ├── daily-log/            spoken daily check-in → one structured note; watch rules, summaries
+    │       ├── advisors/             entry point to the prompt-note advisors (life coach, therapist, chef, …)
     │       ├── finances/             read-only finance snapshots, sheet + advisor-brief upkeep
     │       ├── phone/                drive Android apps through a scrcpy mirror; read-only by default
     │       ├── setup/                configure and health-check integrations
@@ -161,6 +164,9 @@ written at install time instead of committed.
     │   ├── phonemirror-launcher.sh   the mirror's launcher: picks USB or Wi-Fi, execs scrcpy
     │   ├── phonemirror-stub.c        the bundle executable; only execs the launcher
     │   ├── vault-search.py       hybrid search over the notes: local embeddings + keywords, one SQLite file
+    │   ├── vault-health.py       vault maintenance: read-only report on frontmatter, descriptions, links, tags, duplicates
+    │   ├── vault-health-weekly.sh  the unattended weekly run: report + description proposals into tmp/health/
+    │   ├── advisor-stub.py       builds an advisor's paste-ready Claude project stub from its prompt note
     │   ├── frontmatter-set.py    the bulk frontmatter writer: checked, snapshotted, logged
     │   └── frontmatter-polish/   propose a description and language per note (local or cloud model); review table
     │
@@ -208,6 +214,7 @@ safe to re-run:
 |---|---|---|
 | `me.md`, `maps/vault-map.md` | templates | yours to fill in |
 | `maps/workflow-map.md` | template | which system is authoritative for what — a decision to make once, not a build. Ships pre-filled with a sane default; edit the rows that do not match how you work |
+| `maps/advisors-map.md` | template | your advisors, their prompt notes and phone docs; empty until you add one (see [Advisors](#advisors-claude-projects-as-front-ends-to-the-vault)) |
 | `history/file-log.md`, `history/session-log.md` | templates | your record, not the framework's |
 | `history/lessons.md` | template | the learning ledger — what the OS has been taught. **Yours starts empty.** Comments across this repo cite lessons as `L001`, `L006` and so on: those are entries from the author's ledger, kept as the *reason* a rule or a test exists. They are provenance, not a cross-reference you can follow — read the sentence around them, not the id. |
 | `docs/README.md` | template | creates the folder and says what it is for |
@@ -219,6 +226,7 @@ safe to re-run:
 | `config/clickup-replace-allow.local` | template | task-system page ids the AI may rewrite in full; empty by default, so every whole-page rewrite is denied |
 | `config/sensitivity.local` | template | folders whose notes are private or secret; all comments by default, so only frontmatter labels count |
 | `config/search-index.local` | template | which folders the search index skips or flags as third-party; all comments by default, so the built-in defaults apply |
+| `config/vault-health.local` | template | which folders the health check skips, which notes need no description; all comments by default |
 | `integrations/` | — | **empty on purpose**: a file's existence is the on-switch, so a placeholder here would read as a half-configured tool. The `setup` skill writes the real files. |
 
 `databases/` is not created either: the first `tools/vault-search.py index` makes it (see
@@ -233,8 +241,11 @@ and both symlinks point *into* this repo, so nothing of substance lives outside 
 Stated up front, because the honest version is more useful than a feature list — and
 because these are design decisions, not a backlog of oversights.
 
-- **Nothing runs on a schedule.** Every workflow starts because a human opened a
-  session. No cron, no daemon, no background agent watching your calendar.
+- **Almost nothing runs on a schedule.** Two optional scheduled tasks exist: the weekly,
+  read-only vault health report ([Vault maintenance](#vault-maintenance)), which writes only
+  to `tmp/`, and a morning session that opens the daily-log check-in and waits for you.
+  Everything else starts because a human opened a session: no daemon, no background agent
+  watching your calendar.
 - **Writes to a task system are deliberately constrained.** A test showed that
   rewriting a whole page silently destroys rich content — task and doc references
   flatten to plain links on read, so writing the page back replaces every one of them.
@@ -553,6 +564,128 @@ Folders to skip, folders to flag as external, and the model live in
 `config/search-index.local` (`install.sh` creates it, all comments; defaults skip `_AI/`,
 archives, attachments and templates, and flag nothing as external). With `embedder = none` the index is keywords only: no model needed, but no
 paraphrase either. Run the script directly, never as `python3 vault-search.py`.
+
+## Vault maintenance
+
+A notes vault drifts. Links break when notes are renamed, copies pile up, tags split into
+spellings, and a note's one-line description stops matching what the note became. Vault
+maintenance keeps that in check in three layers, and only the last one needs you.
+
+| Layer | What it does | When |
+|---|---|---|
+| **Prevent** | The `obsidian` skill gives every note it writes a `description`, a sensitivity label where one applies, and quoted YAML values | on every write, automatically |
+| **Detect** | A read-only report of what has drifted | every Monday, unattended |
+| **Repair** | Fixes, proposed first and applied on your word | when you say so |
+
+It is the `vault-maintenance` skill. Ask for it as "vault maintenance", "maintenance",
+"health check" or "check the vault".
+
+### What the report checks
+
+Seven checks, and no model is involved in any of them:
+
+- frontmatter that doesn't parse as YAML
+- notes missing a `description`
+- stale descriptions: the description hasn't changed, but the body has moved a lot
+- broken wikilinks
+- orphan notes, which nothing links to
+- tags that differ only in case or separator
+- likely duplicates, found two ways: Obsidian's "Note 1" copies, and note vectors from the
+  search index that sit above a cosine threshold
+
+Each section of the report names its fixer. The report carries paths and link targets only,
+never note text, so it is safe to show for private notes. Links to date notes that were never
+created (weekly navigation) are counted, not listed.
+
+### How it runs, week to week
+
+1. **Monday 07:30, without you.** A scheduled task runs `tools/vault-health-weekly.sh`. It
+   writes the report to `tmp/health/YYYY-MM-DD.md` and proposes descriptions for notes still
+   missing one. Normal notes go to Haiku. Notes labelled private or secret go to the local
+   model, enforced in `propose.py`. It never writes a note. It needs the machine awake and the
+   app running; if they aren't, the task runs the next time the app opens.
+2. **In the Monday review.** "Plan my week" runs the report fresh, shows you one line ("nothing
+   new", or the counts), and marks those findings as seen (`ack`). If descriptions were
+   proposed, it offers the review sheet; on "apply", `frontmatter-set.py --from-jsonl` writes
+   them, with a snapshot and a log line per note.
+3. **Anything else is your call, one at a time:** a broken link, a duplicate to merge, a tag
+   spelling.
+
+**You don't need to remember any of this, only to do the Monday review.** A finding stays
+"new" until a report has actually been shown to you. Only `ack` moves that line, and the
+unattended run never acks, so skipped weeks pile up instead of disappearing.
+
+### Recommended rhythm
+
+- **Weekly:** a one-minute glance in the Monday review, and "apply" if descriptions are waiting.
+- **Monthly, optional, about 20 minutes:** `report --all`, then clear a handful of broken links
+  or duplicates.
+- **Leave the orphan backlog alone.** Search finds unlinked notes anyway. An orphan is worth a
+  look when it's *new*, because that is a note you just forgot to link.
+
+### Commands
+
+```bash
+tools/vault-health.py report          # what's new since you last looked
+tools/vault-health.py report --all    # every finding
+tools/vault-health.py ack             # mark the current findings as seen (after showing a report)
+tools/vault-health.py missing         # notes without a description, one path per line
+```
+
+**How "new" and "stale" work.** `databases/vault-health.json` holds the findings at the last
+`ack` and, per note, a hash of its description plus the body's word count and headings. A
+description is stale when it hasn't changed but the body has moved: at least 30% more or fewer
+words (minimum 50), or two headings added or removed. The search index can't do this, because
+it hashes the whole file and can't tell a body edit from a frontmatter edit. Links are resolved
+from disk the way Obsidian resolves them, so the check works with Obsidian closed. It takes
+about 15 s on 1,100 notes. Proposals accumulate in `tmp/health/proposals.jsonl`, so a note is
+proposed once, and a proposal that failed (Ollama down) is retried the next week. Settings live
+in `config/vault-health.local`.
+
+## Advisors: Claude projects as front-ends to the vault
+
+A Claude Desktop project is a good home for a long-running advisor (a coach, a therapist
+persona, a chef, a financial advisor) because it is on the phone too. Used on its own, it
+has four problems:
+
+- **Its knowledge files go stale.** You upload a note, edit the note, and the project keeps
+  the old copy.
+- **Its memory is stuck in the cloud.** Nothing outside the project can read it, so the
+  laptop and the other projects never see what it learned.
+- **The phone can't reach the vault.** A linked desktop project can read local files; the
+  same project on the phone can't.
+- **Projects can't see each other.** The career coach doesn't know what the therapist
+  noticed, and nobody connects them.
+
+The fix is to make the **vault the master** and the project a thin front-end for the phone.
+
+| Piece | Where | What it does |
+|---|---|---|
+| **Prompt note** | vault, `_NOTES/Claude <Advisor> prompt.md` | persona, judgment and the advisor's file map. The only place the prompt is edited. |
+| **Working notes** | vault, `<Advisor> _ <Topic>.md` | what the advisor knows and keeps, as few as the domain needs. Replaces project memory as the store. |
+| **Stub + fallback** | project instructions | "If the vault is reachable, read the note; it wins." Below it, a copy of the note body with a version line, so a phone chat can say when its copy is stale. Generated by `tools/advisor-stub.py`, pasted by hand. |
+| **Phone copies** | project docs | copies of the few notes a phone chat needs. The linked session refreshes them. Only the title counts: the project tool names a doc a chat writes `claude/<Title>`, while one you upload keeps its name. |
+| **Phone inbox** | project memory | the only job left for memory: on the phone, what must reach the vault goes there marked `phone, not yet in vault`. The next linked session writes it to the vault after you confirm, and clears it. |
+| **Shared ledger** | vault | one note every advisor reads. Only a hub advisor writes its sections; the others propose one line. This is how projects see each other. |
+| **Router** | `advisors` skill + `maps/advisors-map.md` | runs any advisor from Claude Code on the laptop, with the AIOS rules (confirm writes, file log, sensitivity labels) on top of the prompt's own. |
+
+Every prompt note follows one spine (`templates/advisor-prompt.template.md`): who does what,
+the advisor's own sections, other advisors, the ledger, *Knowledge, files and continuity*
+(file map, project copies, access per surface, vault edits, prompt changes, sync rule), end
+of session. Advisors whose phone chats decide things end them with a *Decisions & new facts*
+block you paste into the AIOS; the others don't need one.
+
+**Adding one:** copy the template to a prompt note, add a block to `maps/advisors-map.md`,
+run `tools/advisor-stub.py "<Advisor>"`, create the project, paste the stub, upload the phone
+copies. **Moving an existing project in** takes one migration chat inside that project
+(only it can read its own docs and memory). It exports everything verbatim to `_AI/tmp/`,
+proposes a target for each item, writes to the vault on your yes, and keeps only the phone
+copies. The `advisors` skill has the prompt.
+
+**What it can't do:** the phone still can't write to the vault, so anything decided there
+waits for the next linked session; copies lag between refreshes; and a prompt change means
+re-pasting the stub. A vault connector reachable from the phone would remove the inbox
+and the copies, and is the obvious next step.
 
 ## Phone mirror (optional)
 

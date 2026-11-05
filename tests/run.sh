@@ -362,7 +362,7 @@ expect 2 hooks/guard-agent-read.sh \
 expect 0 hooks/guard-agent-read.sh \
   '{"tool_name":"Read","tool_input":{"file_path":"/v/_AI/me.md"}}'
 expect 0 hooks/guard-agent-read.sh \
-  '{"agent_type":"scout-researcher","tool_name":"Read","tool_input":{"file_path":"/v/_AI/me.md"}}'
+  '{"agent_type":"general-purpose","tool_name":"Read","tool_input":{"file_path":"/v/_AI/me.md"}}'
 expect 0 hooks/guard-agent-read.sh 'not json'
 
 # --- trace-write ---
@@ -1257,6 +1257,136 @@ if command -v uv >/dev/null 2>&1 && command -v sqlite3 >/dev/null 2>&1; then
 else
   echo "  skip vault-search (needs uv and sqlite3)"
 fi
+
+# --- vault-health (read-only health report, roadmap #12) ----------------------------
+# One planted case per check, then the two-run behaviour that makes a weekly run quiet:
+# only what is new since the last --save, and a stale description only after the body moves.
+if command -v uv >/dev/null 2>&1; then
+  HTMP=$(mktemp -d)
+  mkdir -p "$HTMP/_AI/config" "$HTMP/v/_NOTES" "$HTMP/v/Periodic notes" "$HTMP/v/Attachments"
+  printf -- '---\ndescription: Hub for ethics notes.\ntags: [AI]\n---\n# Ethics\n[[Deontology|duties]], [[Road bike#Frame]], [[Nowhere]], [[2026-01-01]], ![[api-key-ABCDEFGH12345678WXYZ.txt]] ![[api-key-AAAABBBBCCCCDDDD1111.txt]]\n```\n[[In code]]\n```\n' > "$HTMP/v/_NOTES/Ethics.md"
+  printf -- '---\ndescription: Kant and duty ethics.\n---\nDuty. #ai [[#Ai section]] [[Road bike#Ai]] [[Road bike|#AI x]]\n' > "$HTMP/v/_NOTES/Deontology.md"
+  printf -- '---\ndescription: An accidental copy.\n---\nDuty again. [[Ideas [shared w A]]] [see [[Road bike]]]\n' > "$HTMP/v/_NOTES/Deontology 1.md"
+  printf -- '---\ndescription: Shared ideas.\n---\nideas\n' > "$HTMP/v/_NOTES/Ideas [shared w A].md"
+  printf -- '---\ndescription: Bikes.\n---\n# Road bike\n## Frame\nsize 58\n' > "$HTMP/v/_NOTES/Road bike.md"
+  printf -- '---\ntitle: Job: offer\n---\nbody\n' > "$HTMP/v/_NOTES/Bad yaml.md"
+  printf -- '---\nsensitivity: private\n---\nzeppelin secret text\n' > "$HTMP/v/_NOTES/No desc.md"
+  printf 'week\n' > "$HTMP/v/Periodic notes/W01.md"
+  printf 'skip = Periodic notes/*\n' > "$HTMP/_AI/config/vault-health.local"
+  VH="$HOOKS/../tools/vault-health.py"
+  vh() { env AIOS_DIR="$HTMP/_AI" AIOS_VAULT_DIR="$HTMP/v" AIOS_SEARCH_DB="$HTMP/none.db" AIOS_HEALTH_STATE="$HTMP/h.json" "$VH" "$@" 2>&1; }
+  hcheck() { # hcheck <label> <must-contain> <must-not-contain|-> <output>
+    case "$4" in *"$2"*) ;; *) echo "  FAIL vault-health: $1 — wanted '$2'" >&2; echo "$4" >&2; FAIL=1; return ;; esac
+    if [ "$3" != "-" ]; then case "$4" in *"$3"*) echo "  FAIL vault-health: $1 — unwanted '$3'" >&2; FAIL=1; return ;; esac; fi
+    echo "  ok   vault-health: $1"
+  }
+  out=$(vh report); vh ack >/dev/null
+  hcheck "invalid YAML is reported with its line, not its text" "Bad yaml.md\` — line 2" "offer" "$out"
+  hcheck "a missing description is reported" "No desc.md" - "$out"
+  hcheck "a skipped folder needs no description" "Missing description: 1 (" "W01" "$(vh report --all | sed -n '/Missing desc/,/^## B/p')"
+  hcheck "a broken link is reported" "— Nowhere" "In code" "$out"
+  hcheck "a link to a never-created date note is expected" "1 link(s) to date notes" - "$out"
+  hcheck "alias and heading links resolve" "Broken links: 3 " "Road bike#" "$out"
+  hcheck "key-like ids in attachment names are masked" "api-key-…" "ABCDEFGH12345678" "$out"
+  hcheck "a link target with brackets resolves" "Broken links: 3 " "shared w A" "$out"
+  hcheck "a bracket after a link is not part of it" "Vault health" "Road bike]" "$out"
+  hcheck "rows that read alike after masking are collapsed" "api-key-….txt (×2)" - "$out"
+  hcheck "a first run counts orphans without listing them" "Not listed on a first run" "Ethics.md\`" "$(echo "$out" | sed -n '/Orphan/,/^## T/p')"
+  hcheck "report --all lists the orphans" "Ethics.md\`" - "$(vh report --all | sed -n '/Orphan/,/^## T/p')"
+  hcheck "tag case variants are reported" "#ai (1×) vs #AI (1×)" - "$out"
+  hcheck "a heading anchor in a wikilink is not a tag" "Vault health" "#Ai " "$out"
+  hcheck "an Obsidian copy is a likely duplicate" "Deontology 1.md\` — same name as _NOTES/Deontology.md" - "$out"
+  hcheck "the report never carries note text" "Vault health" "zeppelin" "$out"
+  hcheck "a run with nothing new is one line" "nothing new since" "##" "$(vh report)"
+  hcheck "missing lists paths for propose.py" "_NOTES/No desc.md" "Bad yaml" "$(vh missing)"
+  printf -- '---\ndescription: Bikes.\n---\n# Road bike\n## Frame\nsize 58\n## Wheels\n## Gears\n' > "$HTMP/v/_NOTES/Road bike.md"
+  printf -- '---\ndescription: New.\n---\n# Plan\n' > "$HTMP/v/_NOTES/Fresh.md"
+  out=$(vh report)
+  hcheck "an orphan first seen after the last run is listed" "Fresh.md\`" "Ethics.md\`" "$out"
+  hcheck "a body that moved under an unchanged description is stale" "Road bike.md\` — 2 heading(s) added" - "$out"
+  hcheck "the second run lists only what is new" "Stale description: 1 new" "Bad yaml" "$out"
+  printf -- '---\ndescription: Bikes, wheels and gears.\n---\n# Road bike\n## Frame\nsize 58\n## Wheels\n## Gears\n' > "$HTMP/v/_NOTES/Road bike.md"
+  hcheck "a rewritten description resets the baseline" "nothing new" "Stale" "$(vh ack >/dev/null; vh report)"
+  # The weekly wrapper, with Ollama unreachable: the report still lands, the failed proposal
+  # is kept, and the next week retries it instead of counting it as done.
+  wk() { env AIOS_DIR="$HTMP/_AI" AIOS_VAULT_DIR="$HTMP/v" AIOS_SEARCH_DB="$HTMP/none.db" AIOS_HEALTH_STATE="$HTMP/h.json" \
+           AIOS_HEALTH_OUT="$HTMP/out" HEALTH_BACKEND=ollama HEALTH_MODEL=m OLLAMA_HOST=http://127.0.0.1:9 \
+           "$HOOKS/../tools/vault-health-weekly.sh" >/dev/null 2>&1; }
+  printf '[[Gone]]\n' >> "$HTMP/v/_NOTES/Fresh.md"
+  wk; wk
+  D=$(date +%F)
+  hcheck "an unseen finding survives a second weekly run" "— Gone" - "$(cat "$HTMP/out/$D.md" 2>&1)"
+  hcheck "ack marks the shown findings as seen" "nothing new since you last looked" "Gone" "$(vh ack >/dev/null; vh report)"
+  hcheck "the weekly run writes a review sheet" "No desc" - "$(cat "$HTMP/out/$D-review.md" 2>&1)"
+  hcheck "a failed proposal is retried the next week" "2" - "$(grep -c 'No desc' "$HTMP/out/proposals.jsonl" 2>&1)"
+  hcheck "this week's sheet holds one row per note" "1" - "$(grep -c 'No desc' "$HTMP/out/$D-proposals.jsonl" 2>&1)"
+  # tmp housekeeping: sorted by name and age, trashed only through the trash command, never rm.
+  mkdir -p "$HTMP/_AI/tmp/old-snapshot-dir" "$HTMP/_AI/tmp/health" "$HTMP/v/tmp" "$HTMP/trash"
+  for f in README.md 2026-01-01-page-before-W1.md writes-abc.log writes-new.log mystery.txt \
+           chef-project-stub.md psychotherapist-export-x.md fresh-before-edit.md; do : > "$HTMP/_AI/tmp/$f"; done
+  : > "$HTMP/v/tmp/Career Status.backup.md"; : > "$HTMP/_AI/tmp/old-snapshot-dir/a.md"
+  OLD=$(date -v-20d +%Y%m%d0000 2>/dev/null || date -d '20 days ago' +%Y%m%d0000)
+  MID=$(date -v-3d +%Y%m%d0000 2>/dev/null || date -d '3 days ago' +%Y%m%d0000)
+  for f in README.md 2026-01-01-page-before-W1.md writes-abc.log mystery.txt chef-project-stub.md old-snapshot-dir/a.md old-snapshot-dir; do
+    touch -t "$OLD" "$HTMP/_AI/tmp/$f"; done
+  touch -t "$MID" "$HTMP/_AI/tmp/psychotherapist-export-x.md" "$HTMP/v/tmp/Career Status.backup.md"
+  touch -t "$OLD" "$HTMP/v/tmp/Career Status.backup.md"
+  printf '#!/bin/sh\nmv "$@" "%s/trash/"\n' "$HTMP" > "$HTMP/fake-trash"; chmod +x "$HTMP/fake-trash"
+  out=$(vh tmp)
+  hcheck "an old backup in tmp is stale" "2026-01-01-page-before-W1.md" "README.md" "$out"
+  hcheck "old hook state is stale, fresh hook state is not" "writes-abc.log" "writes-new.log" "$out"
+  hcheck "a sensitive export is stale after 2 days" "**sensitive** in \`_AI/tmp/\`: 1" - "$out"
+  hcheck "a folder is aged by its newest file" "old-snapshot-dir" - "$out"
+  hcheck "an unknown file is asked about, not trashed" "To classify: 1" - "$out"
+  hcheck "a recent backup is not old enough yet" "Not old enough yet: 2" "fresh-before-edit" "$out"
+  hcheck "a project stub is kept" "tmp housekeeping" "chef-project-stub" "$out"
+  hcheck "a vault-root tmp/ is flagged" "vault-root tmp/ present (1)" - "$out"
+  hcheck "the report carries the tmp line" "tmp: 5 stale" - "$(vh report)"
+  vt() { env AIOS_DIR="$HTMP/_AI" AIOS_VAULT_DIR="$HTMP/v" AIOS_TRASH="$1" "$VH" tmp --trash 2>&1; }
+  vt "$HTMP/fake-trash" >/dev/null
+  hcheck "trash moves only the stale items" "2026-01-01-page-before-W1.md" "mystery" "$(ls "$HTMP/trash")"
+  hcheck "trash removes the emptied vault-root tmp/" "gone" - "$([ -d "$HTMP/v/tmp" ] && echo still || echo gone)"
+  hcheck "unknown and young files stay" "mystery.txt" - "$(ls "$HTMP/_AI/tmp")"
+  : > "$HTMP/_AI/tmp/2026-01-02-x-before.md"; touch -t "$OLD" "$HTMP/_AI/tmp/2026-01-02-x-before.md"
+  hcheck "trash never falls back to rm" "not found" - "$(vt "$HTMP/nope")"
+  hcheck "a refused trash leaves the file" "2026-01-02-x-before.md" - "$(ls "$HTMP/_AI/tmp")"
+  rm -rf "$HTMP"
+else
+  echo "  skip vault-health (needs uv)"
+fi
+
+# propose.py: a failed row (Ollama down) must be retried by the next run, not counted as done.
+PTMP=$(mktemp -d)
+mkdir -p "$PTMP/v/_NOTES"; printf 'hello\n' > "$PTMP/v/_NOTES/A.md"
+printf '{"path": "_NOTES/A.md", "error": "URLError: down"}\n' > "$PTMP/run.jsonl"
+echo "_NOTES/A.md" | env AIOS_VAULT_DIR="$PTMP/v" OLLAMA_HOST=http://127.0.0.1:9 \
+  python3 "$HOOKS/../tools/frontmatter-polish/propose.py" --model m --out "$PTMP/run.jsonl" >/dev/null 2>&1
+if [ "$(wc -l < "$PTMP/run.jsonl" | tr -d ' ')" = 2 ]; then
+  echo "  ok   propose.py: an error row is retried on resume"
+else
+  echo "  FAIL propose.py: an error row was counted as done" >&2; FAIL=1
+fi
+rm -rf "$PTMP"
+
+# --- prune-session-state (SessionStart housekeeping) ------------------------------
+# Old markers go to the Trash command, young ones and other files stay, and no trash
+# command means nothing is removed (never an rm fallback).
+PSTMP=$(mktemp -d); mkdir -p "$PSTMP/_AI/.claude/hooks" "$PSTMP/_AI/tmp" "$PSTMP/trash"
+cp "$HOOKS/hooks/prune-session-state.sh" "$HOOKS/hooks/lib.sh" "$PSTMP/_AI/.claude/hooks/"
+for f in writes-old.log .retro-asked-old writes-new.log 2026-01-01-note-before.md; do : > "$PSTMP/_AI/tmp/$f"; done
+OLDT=$(date -v-20d +%Y%m%d0000 2>/dev/null || date -d '20 days ago' +%Y%m%d0000)
+touch -t "$OLDT" "$PSTMP/_AI/tmp/writes-old.log" "$PSTMP/_AI/tmp/.retro-asked-old" "$PSTMP/_AI/tmp/2026-01-01-note-before.md"
+printf '#!/bin/sh\nmv "$@" "%s/trash/"\n' "$PSTMP" > "$PSTMP/fake-trash"; chmod +x "$PSTMP/fake-trash"
+echo '{"session_id":"s","hook_event_name":"SessionStart"}' | AIOS_TRASH="$PSTMP/nope" sh "$PSTMP/_AI/.claude/hooks/prune-session-state.sh"
+if [ -e "$PSTMP/_AI/tmp/writes-old.log" ]; then echo "  ok   prune-session-state: no trash command, nothing removed"; else echo "  FAIL prune-session-state: removed without a trash command" >&2; FAIL=1; fi
+echo '{"session_id":"s","hook_event_name":"SessionStart"}' | AIOS_TRASH="$PSTMP/fake-trash" sh "$PSTMP/_AI/.claude/hooks/prune-session-state.sh"
+got=$(ls -A "$PSTMP/trash" | tr '\n' ' '); left=$(ls -A "$PSTMP/_AI/tmp" | tr '\n' ' ')
+case "$got|$left" in
+  *".retro-asked-old"*"writes-old.log"*"|"*"2026-01-01-note-before.md"*"writes-new.log"*)
+    echo "  ok   prune-session-state: old markers trashed, young markers and other files kept" ;;
+  *) echo "  FAIL prune-session-state: trashed [$got], left [$left]" >&2; FAIL=1 ;;
+esac
+rm -rf "$PSTMP"
 
 # --- nudge-vault-search + refresh-search-index (roadmap #10) ------------------------
 # The nudge never blocks: exit 0 always, the assertion is on whether it speaks.

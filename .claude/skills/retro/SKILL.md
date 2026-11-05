@@ -52,7 +52,7 @@ tools/session-digest.sh --session <prefix>   # a past one
 
 It prints the human's own turns, the ones that read as corrections, hook denials,
 failed calls and framework writes — a few KB from a transcript of megabytes. Write it
-to `tmp/` if it is long. **Never commit a digest.**
+to `_AI/tmp/` if it is long. **Never commit a digest.**
 
 Read it *against* your own memory of the session, not instead of it. The digest holds
 what happened; you hold why. A lesson usually lives in the gap between the two.

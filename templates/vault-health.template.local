@@ -1,0 +1,29 @@
+# Vault health settings for tools/vault-health.py. One `key = value` per line;
+# blank lines and #-comments are ignored. Every key is optional: a missing key
+# keeps the built-in default shown below.
+#
+# Globs are matched against the VAULT-RELATIVE path, as fnmatch patterns, so `*`
+# also crosses `/`. Lists are comma-separated.
+#
+# exclude     folders never checked (links INTO them still resolve). Setting it
+#             REPLACES the default list.
+#             default: _AI/*, .obsidian/*, .trash/*, Archive/*, Attachments/*, copilot/*, Templates/*, Excalidraw/*
+# skip        notes whose filenames route them: no description needed, never an
+#             orphan, never a duplicate. default: none
+# periodic    regex; a broken link whose target matches it points at a date note
+#             that was never created, and is counted, not listed.
+#             default: \d{4}-(?:\d{2}-\d{2}|\d{2}-W\d{2}|W\d{2})
+# dup_cosine  note-vector similarity from which two notes count as likely
+#             duplicates (needs the search index). default: 0.92
+# tmp_keep, tmp_state, tmp_scratch, tmp_sensitive
+#             filename globs for `vault-health.py tmp` (matched against names in
+#             _AI/tmp/): kept / hook state / backup or scratch / sensitive. Anything
+#             else is "to classify". Defaults are in tools/vault-health.py.
+# tmp_days, tmp_state_days, tmp_sensitive_days
+#             age in days from which scratch, hook state and sensitive items are
+#             stale. default: 7, 14, 2
+#
+# Never exported: your folder names describe your vault.
+#
+# Examples:
+# skip = Periodic notes/*, Transcripts/*

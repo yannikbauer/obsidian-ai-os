@@ -141,6 +141,7 @@ scaffold () {  # $1 = template path (relative to _AI), $2 = target (relative to 
 scaffold "templates/me.template.md"                      "me.md"
 scaffold "templates/vault-map.template.md"               "maps/vault-map.md"
 scaffold "templates/workflow-map.template.md"           "maps/workflow-map.md"
+scaffold "templates/advisors-map.template.md"           "maps/advisors-map.md"
 # history/ must exist before the first logged change, or rule 5 fails on first use
 scaffold "templates/file-log.template.md"                "history/file-log.md"
 scaffold "templates/session-log.template.md"             "history/session-log.md"
@@ -169,6 +170,8 @@ scaffold "templates/clickup-replace-allow.template.local" "config/clickup-replac
 scaffold "templates/sensitivity.template.local"           "config/sensitivity.local"
 # all-comments by default: the search index runs on its built-in defaults
 scaffold "templates/search-index.template.local"          "config/search-index.local"
+# all-comments by default: the health check runs on its built-in defaults
+scaffold "templates/vault-health.template.local"          "config/vault-health.local"
 
 # integrations/ stays EMPTY on purpose: in this framework a file's existence is the
 # on-switch, so a placeholder .md here would read as a half-configured tool. The
@@ -258,4 +261,6 @@ echo
 echo "Done. Next:"
 echo "  - fill in _AI/me.md, _AI/maps/vault-map.md if freshly scaffolded"
 echo "  - start a session and run the 'setup' skill to configure your tools (writes _AI/integrations/)"
+echo "  - optional: advisors (Claude projects backed by the vault) start from"
+echo "    templates/advisor-prompt.template.md; ask the 'advisors' skill to add one"
 echo "  - cd \"$VAULT_DIR\" && claude   # start a session"
