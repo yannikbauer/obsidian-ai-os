@@ -102,6 +102,8 @@ sources: <n threads read>
 archived: false
 ---
 # Newsletter Digest YYYY-Www
+<< [[Newsletter Digest <week-2>|Week before]] < [[Newsletter Digest <week-1>|Previous week]] | [[Newsletter Digest <week+1>|Next week]] > [[Newsletter Digest <week+2>|Week after]] >>
+
 <link to the week's weekly note>
 
 ## Suggested todos
@@ -112,6 +114,10 @@ archived: false
 ## Sources             (read this week · unsubscribe · subscribe · new candidates · flags)
 ## Digested threads    (thread ids with sender, for archiving — collapsed callout)
 ```
+
+The navigation line mirrors the weekly notes' one. `<week±n>` are ISO weeks (`YYYY-Www`),
+counted across year ends: some years have a W53. The links point at neighbouring digests
+whether or not they exist yet, so a future note fills in the link when it is written.
 
 Domain sections: bullets, one per story, `**headline** — gist; why it matters (source)`.
 Keep the whole note readable in five minutes; detail stays in the mail.
@@ -174,13 +180,18 @@ The next Monday run needs nothing special: its window starts at the previous not
 
 A spoken rendering of an existing digest note, for listening on the phone (the user reads it
 out via text-to-speech, or has it read to them). Source is the note only: no new mail,
-no edits. Reply in chat; write a file only if asked (then `_AI/tmp/`, not the vault). Two forms:
+no edits, and nothing the note doesn't say. No extra questions, todos or opinions; the
+spoken form re-renders the note, it doesn't extend it. Reply in chat; write a file only if
+asked (then `_AI/tmp/`, not the vault). Two forms:
 
-- **Short** (default for "read it to me", ~5 min): what to act on → calendar → themes with ≥2
-  sources plus two or three other stories → one line per remaining domain → the reflection's point and questions →
-  housekeeping in two lines (what's kept in the inbox, anything the user must switch off).
-- **Full** ("long form", "everything"): every section of the note in the note's order, nothing
-  dropped. Open by naming how many parts there are, then mark each one ("Part three: top themes").
+- **Full** (the default, for any read-aloud request that doesn't ask for short, ~15–20 min):
+  every section of the note in the note's order, nothing dropped. Open by naming how many parts
+  there are, then mark each one ("Part three: top themes"). After it, ask once, in one line,
+  whether a short version is wanted too.
+- **Short** (only when asked: "short version", "the five-minute one", or yes to that question;
+  ~5 min): what to act on → calendar → themes with ≥2 sources plus two or three other stories →
+  one line per remaining domain → the reflection's point and questions → housekeeping in two
+  lines (what's kept in the inbox, anything the user must switch off).
 
 Spoken-form rules (both forms):
 - **No markup or symbols a voice can't say.** Write currencies, %, →, ×, ~ and ranges out in words. Write

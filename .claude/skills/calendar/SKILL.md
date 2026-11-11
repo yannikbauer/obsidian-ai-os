@@ -24,7 +24,7 @@ Access to the user's calendar (read + write) via MCP tools, whatever the provide
 - The user keeps **several themed calendars**. When reading their schedule, check **all writable calendars**, not just the primary (IDs in the integrations file).
 - **"Writable" means listed as writable in the integration file — not whatever the API reports as writable.** A shared resource (meeting room, desk, booking calendar) often accepts writes but holds other people's bookings, so it is neither a record of the user's commitments nor somewhere to create events. The integration file is the authority; never widen the set from a live calendar list.
 - Use the timezone declared in the calendar integration file. Never assume one.
-- Creating events: pick the calendar by theme (default to primary/Inbox if unsure; ask if genuinely ambiguous). Keep titles short and casual; don't add descriptions/reminders unless asked. Never create on read-only calendars.
+- Creating events: pick the calendar by theme (default to primary/Inbox if unsure; ask if genuinely ambiguous). Keep titles short and casual; don't add descriptions unless asked. Reminders follow the integration file's convention if it has one (otherwise none unless asked). Never create on read-only calendars.
 - Some calendars are synced task reminders from the configured task system rather than real appointments — the integrations file marks these; surface them as tasks, not appointments.
 
 **Can do:** show schedule (today/week/range), find free time, check availability, create/update/delete events (delete with confirmation), suggest meeting times.

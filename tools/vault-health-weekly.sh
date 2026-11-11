@@ -20,7 +20,8 @@ OUT="${AIOS_HEALTH_OUT:-$AI/tmp/health}"
 D=$(date +%F)
 mkdir -p "$OUT"
 "$AI/tools/vault-health.py" missing > "$OUT/$D-missing.txt" || exit 1
-"$AI/tools/vault-health.py" report > "$OUT/$D.md" || exit 1
+# Frontmatter `status: open`; whoever applies the fixes sets it to applied (vault-maintenance skill)
+{ printf -- '---\nstatus: open\n---\n\n'; "$AI/tools/vault-health.py" report; } > "$OUT/$D.md" || exit 1
 "$AI/tools/vault-health.py" tmp > "$OUT/$D-tmp.md"
 [ -s "$OUT/$D-missing.txt" ] || exit 0
 "$AI/tools/frontmatter-polish/propose.py" --backend "${HEALTH_BACKEND:-claude}" --model "${HEALTH_MODEL:-haiku}" \

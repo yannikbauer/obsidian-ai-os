@@ -14,6 +14,10 @@ model. Settings are in `_AI/config/vault-health.local`. Run the tools directly, 
 
 ## Report
 
+0. **Check whether this week is already handled.** Read the frontmatter of this week's
+   `_AI/tmp/health/<date>.md`. If `status` is `applied` (or `partly applied`), it was dealt with
+   in another session: say so in one line ("vault health: applied <applied>, <done>"), show
+   what is still open, and don't offer the sheet again.
 1. Run `_AI/tools/vault-health.py report`. It lists what is new since the user last looked;
    `--all` lists every finding.
 2. Show it. In the Monday review, show only the summary line: the counts under the heading, or
@@ -41,6 +45,12 @@ Every fix is confirmed first. Each section of the report names its fixer:
 - **Broken link, orphan, tag variant, duplicate.** One at a time, the user's call. Merging two
   notes rewrites every link to the one that goes, so list those links first. Rename a tag with
   Obsidian's Tag Wrangler, or note by note.
+- **Mark the report when you're done.** After applying fixes from a weekly report, update the
+  frontmatter of `_AI/tmp/health/<date>.md` (the weekly run writes `status: open`): set
+  `status: applied` (or `partly applied` while findings that need the user's call are still
+  open), `applied: YYYY-MM-DD HH:MM`, and `done:` as one short line of what changed. Other
+  sessions, the Monday review above all, read this so they don't offer work that's already done.
+  It's a tmp file, not a note: use `Edit`, and it gets no file-log line.
 - **Never bulk-edit notes through Bash.** Writes go through `frontmatter-set.py` or the notes
   API, and every changed note gets a line in `history/file-log.md`.
 

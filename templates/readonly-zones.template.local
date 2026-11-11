@@ -6,6 +6,10 @@
 # list everything you want blocked. The two below are the defaults; keep them
 # unless you mean to drop them.
 #
+# Add ` | move-in` after a glob to make that folder an archive: the AI may MOVE a
+# file into it (vault_move, onto a name that does not exist yet), and everything
+# else there stays read-only. E.g.  */Archive/* | move-in
+#
 # Never exported: your folder names describe your vault.
 # Keep it in step with the read-only section of maps/vault-map.md.
 */Archive/*

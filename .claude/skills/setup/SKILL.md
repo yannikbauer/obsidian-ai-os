@@ -99,6 +99,31 @@ The new integration file's `**Role:**` **must** be one of the fixed role values:
 4. **Smoke-test.** `tools/vault-search.py status`, then a search for a note the user names. It should come back in the top few. Run it directly, never as `python3 vault-search.py`.
 5. **Done means wired.** The `CLAUDE.md` rule and the two hooks (`nudge-vault-search.sh`, `refresh-search-index.sh`) activate on their own once `databases/vault-search.db` exists, so there is nothing to switch on. Say that the index refreshes at each session start.
 
+## Scheduled tasks
+
+The recurring tasks live as generic files in `setup/scheduled-tasks/` (one per task: frontmatter
+`id`, `title`, `cron`, `description`, `needs`, `mode`; the body is the prompt with
+`{{VAULT}}` and optional `{{START_DATE}}` placeholders). The app holds the live copies and the
+schedules; these files are the version-controlled reference. Format and rules: that folder's
+`README.md`.
+
+- **Install** (first run, a new computer, or "set up the scheduled tasks"): list the files whose
+  `needs` are all configured (roles from `integrations/`, maps from `maps/`, skills present),
+  say what each does and when, and create the ones the user picks with
+  `create_scheduled_task` (task id, title, description and cron from the frontmatter, prompt =
+  the body with the placeholders filled). Skip any id the app already has; that's *Compare*.
+  Tell the user that runs start in the app's default permission mode and that the app must be
+  open for a task to run on time.
+- **Compare** (part of the health check, or "check my scheduled tasks"): `list_scheduled_tasks`,
+  read each live `SKILL.md`, and set it against the file with the placeholders filled. Report
+  per task: same, prompt differs (show the diff), schedule differs, only in the app (recurring
+  ones are candidates for a new file; finished one-off reminders are ignored), or only in the
+  repo. Fix nothing unasked: the user says which side wins, then update the file (run
+  `setup/leak-check.sh setup/scheduled-tasks` after any edit) or the task.
+- **Generic means generic.** A prompt that needs a personal fact points to the map or
+  integration that holds it. Never write a name, path, person or personal date into these files;
+  the leak check fails the export if one gets through.
+
 ## Safety
 
 - Confirm before every write. Reading APIs and the vault needs no permission.

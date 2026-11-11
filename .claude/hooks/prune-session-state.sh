@@ -19,6 +19,7 @@ DAYS="${AIOS_STATE_DAYS:-14}"
 
 find "$AIOS_DIR/tmp" -maxdepth 1 -type f -mtime +"$DAYS" \( \
     -name 'writes-*.log' -o -name 'denies-*.log' -o -name 'collision-acks-*.log' \
-    -o -name 'nudged-search-*' -o -name '.retro-asked-*' -o -name '.filelog-blocked-*' \) \
+    -o -name 'nudged-search-*' -o -name 'nudged-daily-*' -o -name '.retro-asked-*' \
+    -o -name '.filelog-blocked-*' \) \
     -exec "$TRASH" {} + >/dev/null 2>&1 </dev/null
 exit 0

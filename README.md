@@ -241,9 +241,13 @@ and both symlinks point *into* this repo, so nothing of substance lives outside 
 Stated up front, because the honest version is more useful than a feature list — and
 because these are design decisions, not a backlog of oversights.
 
-- **Almost nothing runs on a schedule.** Two optional scheduled tasks exist: the weekly,
-  read-only vault health report ([Vault maintenance](#vault-maintenance)), which writes only
-  to `tmp/`, and a morning session that opens the daily-log check-in and waits for you.
+- **Little runs on a schedule, and all of it is optional.** The scheduled tasks are
+  version-controlled in `setup/scheduled-tasks/`, one generic file each, and the `setup`
+  skill installs them and checks them against the app. They are: the weekly, read-only vault
+  health report ([Vault maintenance](#vault-maintenance)), which writes only to `tmp/`; the
+  weekly newsletter and job-alert digests, which write one note each and never touch the
+  mail; the two-weekly Life Coach summary, which writes proposals only; and two sessions
+  that open and wait for you (the morning daily-log check-in and the quarterly review).
   Everything else starts because a human opened a session: no daemon, no background agent
   watching your calendar.
 - **Writes to a task system are deliberately constrained.** A test showed that

@@ -28,6 +28,7 @@ zone_hit=''
 if [ -f "$ZONES" ]; then
   while IFS= read -r pat || [ -n "$pat" ]; do
     case "$pat" in ''|\#*) continue ;; esac
+    pat=${pat%% | *}   # drop a `| move-in` flag; the shell route never gets it
     bare=$(printf '%s' "$pat" | sed 's#^\*/##; s#/\*$##; s#^\*##; s#\*$##')
     [ -n "$bare" ] || continue
     case "$cmd" in *"$bare"*) zone_hit="$bare"; break ;; esac

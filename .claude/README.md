@@ -41,6 +41,14 @@ one shell glob per line, and **replaces** the built-in defaults (`Archive/`,
 knobs, so `export.sh` leaves the whole folder behind — your folder names describe your
 vault and do not belong in a shared repo.
 
+A line can end in ` | move-in` (e.g. `*/Archive/* | move-in`). That folder becomes an
+**archive**: a `vault_move` into it is allowed when the target name is free, and
+everything else stays denied — writes, edits, copies, overwrites, moves back out. Added
+2026-11-05 because archiving old versions was a chore the user kept doing by hand; the
+point of the zone is that nothing *in* it changes, not that nothing can arrive. The
+built-in defaults never carry the flag. `guard-bash-vault.sh` ignores it: a shell `mv`
+into the archive still asks.
+
 Keep it in step with the read-only section of `maps/vault-map.md`. The hook is the
 enforcement; the map is the documentation.
 
@@ -99,10 +107,19 @@ an incremental index run in the background and returns at once. It never builds 
 index: that takes 30–90 minutes and belongs to setup. If Ollama is down, the old index
 stays in place and search warns that it is stale.
 
+## Missed check-in: `nudge-daily-log.sh`
+
+**`nudge-daily-log.sh`** (SessionStart, `startup`) covers the daily-log check-in when its
+scheduled task did not run (a local task needs the app running at that hour). If
+yesterday's daily note is missing, it adds one context line asking Claude to offer the
+check-in once. Off unless `maps/daily-log-map.md` carries a
+`<!-- daily-log-note-path: … -->` line (a strftime pattern), so the hook names no folder.
+Once a day (`tmp/nudged-daily-<date>`), not before 07:00. It offers; it runs nothing.
+
 ## Housekeeping: `prune-session-state.sh`
 
 **`prune-session-state.sh`** (SessionStart, `startup`) moves hook markers in `tmp/`
-(`writes-`, `denies-`, `collision-acks-`, `nudged-search-`, `.retro-asked-`,
+(`writes-`, `denies-`, `collision-acks-`, `nudged-search-`, `nudged-daily-`, `.retro-asked-`,
 `.filelog-blocked-`) that no session has touched for 14 days (`AIOS_STATE_DAYS`) to the
 macOS Trash. Age, not session end, is the signal: Stop fires every turn, and a resumed
 session needs its markers again. It never uses `rm`; without `/usr/bin/trash` it does

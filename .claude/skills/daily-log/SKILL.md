@@ -1,7 +1,7 @@
 ---
 name: daily-log
 description: >
-  Daily wellbeing check-in: the user talks for a minute or two about the previous day, the skill turns it into one structured daily note (frontmatter as data: mood, energy, anxiety, sleep, movement, people, work, substances, place and more), asks only for what is missing, adds one rotating question, and ends with at most one factual feedback line when a watch rule fires. Also gives the weekly averages line for the Monday review and computes the numbers for the Life Coach's two-weekly summary. Trigger on "daily log", "check-in", "log yesterday", "log today", "morning check-in", "/daily-log", "how was my week in numbers", "what's good for me", "analyze my log", "log summary", or from the scheduled 09:00 run.
+  Daily wellbeing check-in: the user talks for a minute or two about the previous day, the skill turns it into one structured daily note (frontmatter as data: mood, energy, anxiety, sleep, movement, people, work, substances, place and more), asks only for what is missing, adds one rotating question, and ends with at most one factual feedback line when a watch rule fires. Also gives the weekly averages line for the Monday review and computes the numbers for the Life Coach's two-weekly summary. Trigger on "daily check-in", "do my daily check-in", "daily log", "check-in", "log yesterday", "log today", "morning check-in", "/daily-log", "how was my week in numbers", "what's good for me", "analyze my log", "log summary", or from the scheduled 09:00 run. (A "morning briefing" of today's agenda is the personal-assistant's, not this.)
 ---
 
 # Daily Log
@@ -19,7 +19,12 @@ only if they ask.
 ## 1. Set up (silent, before the first message)
 
 - **Which day.** Default: yesterday. After 18:00, or when the user says "today", log today.
-  The user may name any other date ("log Sunday").
+  The user may name any other date ("log Sunday"). Read the answer for the day it is about:
+  facts and ratings about today go into today's note as *same-day, partial* (the map's rule),
+  and when it is unclear which day a rating covers, ask in the follow-up.
+- **Done items** for the logged day from the task-system's done archive (the map's *Done*
+  section names where), for the note's *Done* section. They also help the readback suggest a
+  best moment when the user can't recall one.
 - **Catch-up from elsewhere.** If the user pastes or points to a check-in held somewhere else
   (a phone session, a chat), treat that text as their free talk for step 3, keep their dates,
   and ask only for what is still missing. A `# daily-log import` YAML block (the Life Coach
@@ -38,8 +43,11 @@ only if they ask.
   measured sleep in the opening or the follow-up as a suggestion for `sleep_h` ("watch says
   7.6 h, right?"); never fill a rating from it. Missing night data → the integration's
   sync-and-retry once, then leave it empty.
-- **Optional pre-fill**, only if quick: the calendar role for the logged day (events with
-  people, travel → `place`, `day_type`). Use it to ask better, never to fill a rating.
+- **Calendar pre-fill** (always, when the calendar role is configured): the logged day and
+  today, across the writable calendars in the integration file (events with people, travel →
+  `place`, `day_type`). Mention what you saw in the opening, so the user can confirm instead of
+  retell. Use it to ask better, never to fill a rating. One failed connector → try the other
+  calendar connector before giving up.
 - **Gaps for the catch-up** (only when a wearable integration exists): list the days in the
   wearable's reachable window (the integration says how far back) that have no note. They
   are handled in step 6a, after the day being logged; mention them in the readback.
@@ -65,6 +73,9 @@ short form.
   caffeine?". Never ask one field per turn.
 - A Tier 2 field the map marks with an "ask it when" condition may join that follow-up when
   its condition holds (e.g. what helped after a bad night). Nothing else in Tier 2 is asked.
+- **Guess and sign off** for the fields the map marks as guessable: when the user didn't say,
+  put your guess and what it rests on into the follow-up, so a yes settles it. A guess is
+  never written without that yes; no answer leaves the field empty.
 - If the user says "skip" or "don't know" for a field, leave it empty. Don't push.
 - `themes`: reuse tags that already appear in recent notes before inventing a new one.
 
@@ -84,9 +95,14 @@ to write. Writing a daily note is the user's own request, so no further approval
 - Path, name and frontmatter order from the map. Body sections from the map's template. No
   `- [ ]` checkboxes (Tasks queries would pick them up).
 - Route: the notes API (`mcp__obsidian__vault_write` / `vault_patch`) when Obsidian runs, else
-  `Write`/`Edit`. **Never Bash.**
+  `Write`/`Edit`. **Never Bash.** A frontmatter `vault_patch` re-serialises the note's
+  whole frontmatter (empty keys become `null`, lists go multi-line). It
+  parses the same, but for update mode prefer reading the note and writing it whole.
 - Empty fields are written as the key with no value, so every note has the same keys.
-- Log one line in `_AI/history/file-log.md`: `[create]` or `[edit]`, path, "daily log".
+- **Diary link** (if the map names a diary): add the day's heading to the diary in its date
+  format, newest first, below the frontmatter, with one line linking the new note. If the
+  heading exists already, add only the link under it. Check-in notes only, not catch-ups.
+- Log one line in `_AI/history/file-log.md` per note touched: `[create]` or `[edit]`, path, "daily log".
 
 ## 6a. Catch-up of missed days
 

@@ -34,11 +34,16 @@ path=$(abspath "$path")
 # so the export allowlist leaves it behind.
 ZONES="$AIOS_DIR/config/readonly-zones.local"
 
+# A zone line is `<glob>` or `<glob> | move-in`. The flag makes the zone an
+# archive: a file may be MOVED into it (vault_move, no overwrite), and it stays
+# read-only for everything else. " | " is the separator because folder names
+# carry spaces but not pipes.
 zone_of() { # zone_of <path> -- prints the matching pattern, or nothing
   _p=$1
   if [ -f "$ZONES" ]; then
-    while IFS= read -r pat || [ -n "$pat" ]; do
-      case "$pat" in ''|\#*) continue ;; esac
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in ''|\#*) continue ;; esac
+      pat=${line%% | *}
       # $pat is deliberately unquoted: in `case`, that makes it a glob.
       case "$_p" in $pat) printf '%s' "$pat"; return ;; esac
     done < "$ZONES"
@@ -50,6 +55,17 @@ zone_of() { # zone_of <path> -- prints the matching pattern, or nothing
       */Archive/*|*/Attachments/*) printf 'built-in default' ;;
     esac
   fi
+}
+
+movein_zone() { # movein_zone <path> -- true if <path> falls in a zone flagged `| move-in`
+  [ -f "$ZONES" ] || return 1   # the built-in defaults never allow it
+  _p=$1
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|\#*) continue ;; *' | move-in') : ;; *) continue ;; esac
+    pat=${line%% | *}
+    case "$_p" in $pat) return 0 ;; esac
+  done < "$ZONES"
+  return 1
 }
 
 zone_hit=$(zone_of "$path")
@@ -64,9 +80,17 @@ fi
 dest=$(printf '%s' "$INPUT" | /usr/bin/jq -r '.tool_input.destination | select(type=="string") // empty' 2>/dev/null)
 if [ -n "$dest" ]; then
   dest=$(abspath "$dest")
+  # A destination ending in '/' keeps the source's file name.
+  case "$dest" in */) dest="$dest$(basename "$path")" ;; esac
   zone_hit=$(zone_of "$dest")
   if [ -n "$zone_hit" ]; then
-    deny "Read-only zone as destination: $dest matches '$zone_hit' in _AI/config/readonly-zones.local. Moving or copying a file into a read-only zone is still a write into it."
+    # Archiving: a move (not a copy) into a `| move-in` zone, onto a free name.
+    # The source was already checked above, so nothing leaves a read-only zone.
+    case "$tool" in
+      *vault_move)
+        if movein_zone "$dest" && [ ! -e "$dest" ]; then exit 0; fi ;;
+    esac
+    deny "Read-only zone as destination: $dest matches '$zone_hit' in _AI/config/readonly-zones.local. Moving or copying a file into a read-only zone is still a write into it. Only a vault_move into a zone flagged '| move-in', onto a name that does not exist yet, is allowed."
   fi
 fi
 

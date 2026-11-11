@@ -57,6 +57,8 @@ Skills contain **generic logic** ("how to operate a task-system's tasks and docs
     `databases/vault-search.db` exists, a "which note was about…" question goes to
     `tools/vault-search.py search "<question>"` first. Grep stays right for an exact string or a
     regex. The obsidian skill has the details: output format, private pointers, fallback.
+    **Cite what you used:** an answer that draws on vault notes ends with a short *Sources*
+    line naming each note and section, so the user can check it (format in the obsidian skill).
 
 ## Safety rules (always apply)
 
