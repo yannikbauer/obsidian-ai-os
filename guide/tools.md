@@ -56,6 +56,37 @@ your `integrations/` files from live API data.
 > `"disableClaudeAiConnectors": true` in settings. If every role suddenly reports
 > unconfigured, check that before debugging anything else.
 
+## What the author connects (all optional)
+
+One working setup, as a starting point rather than a requirement. Every role degrades when its
+tool is missing, and the `setup` skill writes the integration files for whatever you choose.
+
+**Connectors and servers, by role**
+
+| Role or job | Tool | How it connects | Used by |
+|---|---|---|---|
+| mail | Gmail | account connector | `mail`, the digests |
+| calendar | Google Calendar | account connector | `calendar`, weekly planning, meals |
+| task system | ClickUp | account connector | `clickup`, weekly planning |
+| notes API | Obsidian Local REST API | self-registered MCP server | every vault write, while Obsidian is open |
+| transcription | MacWhisper | writes files into the vault (no server) | `transcripts` |
+| health data | a health-data aggregator (watch, sleep) | account connector | `daily-log` suggestions |
+| spreadsheets | Google Sheets and Drive | account connector | `finances` snapshots |
+| scheduled runs | the desktop app's scheduled tasks | built in | digests, health report, check-in |
+| browser | Claude in Chrome | browser extension | job-board passes, web reading |
+| phone apps | computer use + a mirror window | built in | `phone` ([Phone mirror](phone-mirror.md)) |
+
+**Claude Code plugins.** Install them as plugins rather than copying them in: plugin skills are
+namespaced (`superpowers:brainstorming`), so they never collide with this repo's skills.
+
+| Plugin | Why it fits here |
+|---|---|
+| **superpowers** | brainstorming, writing plans, systematic debugging, TDD: the working style for changing the OS itself |
+| **humanizer** | rewrites prose that reads machine-written; useful for the README, guides and drafted mail |
+| **context7** | current library and API docs, for the Python and shell tools |
+| **code-review** | a review pass over a diff before committing changes to hooks or tools |
+| **github** | releases and the public repo, when you publish ([Sharing and publishing](publishing.md)) |
+
 ## Interfaces
 
 The same files and config are read by all of them, so the OS behaves consistently whether you use:

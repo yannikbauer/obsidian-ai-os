@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.0 — 2026-11-11
+
+- New guide: Local models. What runs on Ollama today (search embeddings, descriptions for private notes), setup including the context-window variant, why local is the privacy lane rather than the default, and other uses.
+- New guide: Other harnesses. What carries over to Codex, OpenCode and similar tools, what does not (the safety hooks are Claude Code only), and how to use one safely today.
+- Tools guide: one working set of connectors by role, and recommended Claude Code plugins (superpowers, humanizer, context7, code-review, github). The README's companions section now points there.
+- README: links to both new guides; "Where it's going" now covers running beyond Claude Code; two wording fixes from the newcomer review.
+
 ## v0.8.0 — 2026-11-11
 
 - The README is now a short overview; the detail lives in guide/: architecture, tools and connectors, notes, everyday skills, daily log, advisors, always on, phone mirror, safety and learning, working on the OS, sharing and publishing.

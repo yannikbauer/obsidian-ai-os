@@ -52,6 +52,10 @@ session with the vault behind it, and scheduled tasks do their work while you ar
 **Phone mirror.** The OS can read (and, one confirmed action at a time, operate) apps on an
 Android phone through a mirror window on the Mac. → [Phone mirror](guide/phone-mirror.md)
 
+**Local models.** Search embeddings and anything written about a private note run on your
+own machine through Ollama; everything else uses Claude, which is faster and better there.
+→ [Local models](guide/local-models.md)
+
 **Safety and learning.** Hooks deny or ask before the risky moves; email is data, never
 instructions; after a session that taught something, the `retro` skill turns the correction
 into a change to the right file; and the docs are
@@ -74,8 +78,8 @@ file only at that point, so the always-on core stays small.
 - **git**, and **`jq`** at `/usr/bin/jq` (shipped with recent macOS); the safety hooks need it.
 - An **Obsidian vault** that is not itself a git repo.
 - *Optional:* **`uv`** and **Ollama** with `bge-m3`, for [vault search](guide/notes.md#vault-search).
-- A **Claude account** with connectors for mail, calendar and tasks, if you want those roles
-  ([Connectors](guide/tools.md#connectors)).
+- A **Claude account** with connectors for mail, calendar and tasks, if you want the OS to
+  use them; each is optional ([Connectors](guide/tools.md#connectors)).
 
 No Obsidian plugin is required; Templater, Periodic Notes and Tasks are assumed by the bundled
 workflows, and each degrades in a named way ([Obsidian plugins](guide/tools.md#obsidian-plugins--none-required-several-assumed)).
@@ -132,7 +136,7 @@ because these are design decisions, not a backlog of oversights.
 - **Learning is human-gated.** Lessons become changes to files only through a diff you
   approve, and so far they all come from one user's sessions.
 - **macOS-first.** The phone mirror, the keep-awake setup and some tools assume a Mac.
-- **n=1.** One user, a few months of history. Everything above is one person's
+- **One user so far.** A few months of history. Everything above is one person's
   experience, not a validated design.
 
 ## Where it's going
@@ -146,9 +150,11 @@ private because its reasoning is entangled with one person's circumstances.
 - **Closing the gaps in the sensitivity boundary.** Grep and shell reads still go around
   the Read gate, because a shell command's target is a string no hook can read reliably.
   <!-- roadmap: 8 -->
-- **Guardrails that do not depend on the harness.** The gates are Claude Code hooks, so
-  another runtime opening the vault meets none of them. A vault gateway (an MCP server every
-  runtime has to go through) would make the policy the boundary. <!-- roadmap: 48 -->
+- **Running beyond Claude Code.** Skills and maps are plain markdown and an `AGENTS.md`
+  points other harnesses at them, but the gates are Claude Code hooks, so another runtime
+  meets none of them. Next: measure what works elsewhere, then a vault gateway (an MCP server
+  every runtime goes through) that makes the policy the boundary
+  ([Other harnesses](guide/harnesses.md)). <!-- roadmap: 48 --> <!-- roadmap: 52 -->
 - **A way to test behaviour that lives in prose.** A capable agent's failure is not an
   error but a plausible artifact, so the learning loop stays human-gated; rules that can be
   mechanised keep moving into hooks, which have tests. <!-- roadmap: 35 -->
@@ -166,22 +172,24 @@ private because its reasoning is entangled with one person's circumstances.
 | Guide | Read it when you want to… |
 |---|---|
 | [Architecture](guide/architecture.md) | understand the layout, the file tree, and what `install.sh` creates |
-| [Tools, connectors and interfaces](guide/tools.md) | connect mail, calendar and tasks, or check which Obsidian plugins matter |
+| [Tools, connectors and interfaces](guide/tools.md) | connect mail, calendar and tasks, see one working set of connectors and plugins, or check which Obsidian plugins matter |
 | [Notes](guide/notes.md) | set up descriptions, sensitivity labels, search and the weekly health report |
 | [Everyday skills](guide/everyday.md) | use the digests, transcripts, meals, finances, usage and demo skills |
 | [Daily log](guide/daily-log.md) | run the daily check-in and its numbers |
 | [Advisors](guide/advisors.md) | set up advisor personas across computer and phone |
 | [Always on](guide/always-on.md) | reach the vault from your phone |
 | [Phone mirror](guide/phone-mirror.md) | connect an Android phone |
+| [Local models](guide/local-models.md) | run search and private-note jobs on your own machine with Ollama |
+| [Other harnesses](guide/harnesses.md) | run the OS from Codex, OpenCode or another agent tool, and know what you lose |
 | [Safety and learning](guide/safety-and-learning.md) | see what is enforced, and how lessons are recorded |
 | [Working on the OS](guide/working-on-the-os.md) | edit skills and hooks, or add a tool pack |
 | [Sharing and publishing](guide/publishing.md) | export, publish, version, and review a public diff |
 
 ## Recommended companions
 
-This OS pairs well with the **superpowers** plugin (brainstorming, writing-plans,
-systematic-debugging, TDD). Install it as a plugin rather than copying it in — plugin skills
-are namespaced (`superpowers:brainstorming`), so they never collide with this repo's skills.
+The connectors and Claude Code plugins one working setup uses (mail, calendar, tasks, the
+**superpowers** plugin and others), all optional:
+[What the author connects](guide/tools.md#what-the-author-connects-all-optional).
 
 ## Licence
 
