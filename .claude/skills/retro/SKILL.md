@@ -155,6 +155,8 @@ look rather than grepping.
 
 **6. Propose.** One numbered item per lesson **and per stale claim**: the statement, the
 kind, the destination, and the actual diff. Then stop and wait.
+A change the user asked for by name in this session is approved by that request: apply it,
+then show the diff. The wait is for what the retro found on its own (L040).
 
 **7. Apply what was approved**, update `history/lessons.md`, and commit `_AI/` with only
 the paths touched. Add one line to `history/session-log.md` citing the ledger ids rather

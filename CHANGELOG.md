@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.7.0 — 2026-11-11
+
+- Drift checks: a pre-commit hook (setup/git-hooks/pre-commit, wired in by install.sh) runs check-coverage.sh on every commit; publish.sh runs the full test suite first and asks whether the README was read against the commits that changed what it describes (--readme-reviewed for non-interactive runs).
+- check-coverage.sh now covers every tools/ entry, setup/ folders, scaffolded maps, the vault-root symlinks, and README "Where it's going" bullets against the roadmap.
+- README brought up to date: the agents symlink, the Python tools, scheduled tasks, search in the setup flow, a Daily log section, review-checklist item 7.
+- newsletter-digest and job-digest: weekday runs; archive digested mail under a standing permission recorded in the mail integration file, keeping threads worth a look in the inbox with a reason.
+- daily-log: offers a missed check-in at session start, a diary link per check-in, schema 2; monthly and quarterly reviews through the advisors skill.
+- garmin-export.py: a Garmin Connect export as a daily CSV for a health baseline.
+- Answers drawn from vault notes end with a Sources line.
+- inject-time.sh hook: the local time on every prompt.
+- Weekly review: daily-log line, alerts on created events; archive zones accept moves in.
+- Version-controlled scheduled tasks in setup/scheduled-tasks/.
+
 ## v0.6.0 — 2026-11-05
 
 - **Advisors: Claude projects as front-ends to the vault.** A new `advisors` skill runs long-lived advisor personas (a coach, a chef, a financial advisor, …) whose prompt lives in one vault note. The Claude Desktop project keeps only a generated stub, a fallback copy and phone copies, and project memory becomes a phone inbox the next linked session empties into the vault. New: `tools/advisor-stub.py`, `templates/advisor-prompt.template.md`, `maps/advisors-map.md` (scaffolded), a README section, and an authority row in the workflow-map template.

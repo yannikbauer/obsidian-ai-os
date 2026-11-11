@@ -1,0 +1,21 @@
+#!/bin/sh
+# pre-commit — refuse a commit that leaves the OS's self-description out of step.
+#
+# Runs tools/check-coverage.sh only: about a second. The full suite (tests/run.sh) takes
+# about a minute, and a commit hook that slow gets skipped with --no-verify, at which point
+# it protects nothing (roadmap #42). The full suite runs before every publish and in CI.
+#
+# Checks the working tree, not the index: a fix you made but did not stage still passes
+# here. That trade is deliberate; publish.sh and CI run on what is committed.
+#
+# Wired in by install.sh via `git config core.hooksPath setup/git-hooks`, so the hook is
+# versioned with everything else instead of living untracked in .git/hooks/.
+AI_DIR="$(git rev-parse --show-toplevel)" || exit 0
+[ -x "$AI_DIR/tools/check-coverage.sh" ] || exit 0
+if ! out=$("$AI_DIR/tools/check-coverage.sh" 2>&1); then
+  echo "pre-commit: check-coverage.sh found drift — commit refused:" >&2
+  printf '%s\n' "$out" >&2
+  echo "Fix the README tree / registrations / roadmap it names, then commit again." >&2
+  exit 1
+fi
+exit 0

@@ -79,9 +79,28 @@ if [ -f README.md ]; then
       n=$(basename "$d")
       printf '%s' "$tree" | grep -Fq "$n/" || say "skill missing from README tree: $n"
     done
-    for f in tools/*.sh; do
+    # Every entry in tools/, not just *.sh: the Python tools reached the folder for weeks
+    # without reaching the tree, because the glob only asked about shell scripts.
+    for f in tools/*; do
       [ -e "$f" ] || continue
+      case "$(basename "$f")" in __pycache__|*.pyc) continue ;; esac
       printf '%s' "$tree" | grep -Fq "$(basename "$f")" || say "tool missing from README tree: $f"
+    done
+
+    # Every folder inside setup/ (scheduled-tasks/, git-hooks/, ...). A folder there is
+    # shipped machinery, and the tree listed only the scripts beside it.
+    for d in setup/*/; do
+      [ -d "$d" ] || continue
+      n=$(basename "$d")
+      printf '%s' "$tree" | grep -Fq "$n/" || say "setup folder missing from README tree: setup/$n/"
+    done
+
+    # Every map that ships a template. maps/ is personal, but a map install.sh scaffolds is
+    # part of what a fresh install contains, so the tree must name it.
+    for t in templates/*-map.template.md; do
+      [ -e "$t" ] || continue
+      n=$(basename "$t" .template.md)
+      printf '%s' "$tree" | grep -Fq "$n.md" || say "scaffolded map missing from README tree: $n.md (template: $t)"
     done
 
     # The same absence check, for the two sets that drifted on 2026-09-07 within a single
@@ -124,6 +143,18 @@ if [ -f README.md ]; then
       b=$(basename "$v")
       printf '%s' "$tree" | grep -Fq "$b" \
         || say "vault-root file written by install.sh is missing from README tree: $v"
+    done
+
+    # 3b-iii. The symlinks install.sh makes through link_into_repo. The grep above cannot
+    #         see them (the path sits in a variable inside the function), and a basename
+    #         match would pass anyway: `agents` is named under _AI/.claude/ even while the
+    #         vault-root block lacks it, which is exactly how the third link went
+    #         undocumented. So these are checked against the vault-root part of the tree
+    #         only, everything above the `_AI/` line, and must appear as a link (`->`).
+    root_part=$(printf '%s\n' "$tree" | awk '/── _AI\//{exit} {print}')
+    for l in $(sed -n 's/^link_into_repo[[:space:]]\{1,\}\([^[:space:]]\{1,\}\).*/\1/p' setup/install.sh); do
+      printf '%s\n' "$root_part" | grep -E "[[:space:]]$l[[:space:]]+->" >/dev/null \
+        || say "vault-root symlink made by install.sh is missing from the README tree's root block: .claude/$l"
     done
   fi
 fi
@@ -231,5 +262,53 @@ for f in CLAUDE.md .claude/skills/*/SKILL.md; do
   bad=$(grep -inE '\brules?[[:space:]]+[0-9]+\b' "$f" | head -1)
   [ -n "$bad" ] && say "$f cites a rule by ordinal, which breaks when a rule is inserted — name it instead: $bad"
 done
+
+# 6. The README's "Where it's going" and the roadmap must agree.
+#    Each bullet there carries a hidden `<!-- roadmap: N -->` tag. The README went on
+#    promising a vault health check for a week after it shipped, and the roadmap kept a
+#    shipped skill under *Next* for a month: both are drift between a promise and a fact
+#    that already lives in a file, so both can be checked.
+#      a) every bullet in that section carries a tag (else nothing ties it to anything);
+#      b) when docs/roadmap.md exists, each tagged item exists and is NOT under *Done*;
+#      c) no roadmap item outside *Done* says it shipped (struck heading, SHIPPED or
+#         RESOLVED in the heading, or a paragraph opening "**Built YYYY-" / "**Shipped YYYY-").
+#    docs/ is never exported, so (b) and (c) skip in a fork or the public repo; (a) holds
+#    everywhere, because the README ships.
+if [ -f README.md ]; then
+  untagged=$(awk '
+    /^## /{ insec = ($0 ~ /^## Where it.s going/); if (!insec && b != "") { if (b !~ /roadmap:/) print substr(b,1,60); b="" } ; next }
+    !insec { next }
+    /^- /{ if (b != "" && b !~ /roadmap:/) print substr(b,1,60); b=$0; next }
+    /^[[:space:]]+[^[:space:]]/{ if (b != "") b = b " " $0; next }
+    /^$/{ if (b != "" && b !~ /roadmap:/) print substr(b,1,60); b=""; next }
+    END{ if (insec && b != "" && b !~ /roadmap:/) print substr(b,1,60) }' README.md)
+  [ -z "$untagged" ] || say "README 'Where it's going' bullet has no <!-- roadmap: N --> tag: $(printf '%s' "$untagged" | head -1)"
+fi
+if [ -f docs/roadmap.md ]; then
+  # one line per item: "<tier> <number> <shipped-flag>"
+  items=$(awk '
+    # Flush the pending item BEFORE switching tier: the last item of a tier is otherwise
+    # printed under the next tier, which put a shipped item at the end of Later "in Done".
+    /^## /{ if (num != "") print tier, num, flag; num=""; tier=$2; next }
+    /^### [0-9]+\./{
+      if (num != "") print tier, num, flag
+      num=$2; sub(/\.$/, "", num)
+      flag = ($0 ~ /~~|SHIPPED|RESOLVED/) ? "shipped" : "open"; next }
+    /^\*\*(Built|Shipped) [0-9][0-9][0-9][0-9]-/{ if (num != "") flag="shipped" }
+    END{ if (num != "") print tier, num, flag }' docs/roadmap.md)
+  for n in $(printf '%s\n' "$items" | awk '$1 != "Done" && $3 == "shipped" {print $2}'); do
+    say "roadmap item #$n says it shipped but is not under Done — move it"
+  done
+  if [ -f README.md ]; then
+    for n in $(grep -o '<!-- roadmap: [0-9]* -->' README.md | grep -o '[0-9][0-9]*'); do
+      t=$(printf '%s\n' "$items" | awk -v n="$n" '$2 == n {print $1; exit}')
+      if [ -z "$t" ]; then
+        say "README 'Where it's going' cites roadmap item #$n, which the roadmap does not have"
+      elif [ "$t" = "Done" ]; then
+        say "README 'Where it's going' still promises roadmap item #$n, which is Done — move it into the README's description of what exists"
+      fi
+    done
+  fi
+fi
 
 [ "$problems" -eq 0 ] || exit 1

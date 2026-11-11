@@ -720,6 +720,41 @@ case "$cvrout" in
   *) echo "  FAIL check-coverage missed an undocumented vault-root file" >&2; FAIL=1 ;;
 esac
 
+# --- check-coverage: README promises vs the roadmap, and the root-block links ----
+# The drift found on 2026-11-11: a "Where it's going" bullet for something already
+# shipped, a shipped item still under Next, and a vault-root symlink named only under
+# _AI/.claude/. Each fixture breaks exactly one of them in its own scratch copy.
+cvfix() { # cvfix <dir>: a complete scratch copy with a minimal roadmap
+  cp -R "$HOOKS/../tools" "$HOOKS/../setup" "$HOOKS/../.claude" \
+        "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$1/" 2>/dev/null
+  mkdir -p "$1/docs"
+  {
+    printf '## Next\n\n### 46. Repair · S\n\n### 8. Sensitivity · S\n\n### 48. Gateway · M\n\n### 35. Evals · M\n\n'
+    printf '### 7. Shipped but parked\n\n**Built 2026-01-01** as a skill.\n\n'
+    printf '## Done\n\n### 12. ~~Health check~~ · SHIPPED 2026-11-04\n'
+  } > "$1/docs/roadmap.md"
+}
+cvexpect() { # cvexpect <dir> <expected message fragment> <label>
+  cvo=$(cd "$1" && sh tools/check-coverage.sh 2>&1)
+  case "$cvo" in
+    *"$2"*) echo "  ok   check-coverage catches $3" ;;
+    *) echo "  FAIL check-coverage missed $3" >&2; FAIL=1 ;;
+  esac
+}
+CVRM=$(mktemp -d); cvfix "$CVRM"
+cvexpect "$CVRM" "roadmap item #7 says it shipped but is not under Done" "a shipped roadmap item outside Done"
+sed 's/<!-- roadmap: 46 -->/<!-- roadmap: 12 -->/' "$CVRM/README.md" > "$CVRM/R2" && mv "$CVRM/R2" "$CVRM/README.md"
+cvexpect "$CVRM" "still promises roadmap item #12, which is Done" "a README promise for a Done item"
+sed 's/ <!-- roadmap: 8 -->//' "$CVRM/README.md" > "$CVRM/R2" && mv "$CVRM/R2" "$CVRM/README.md"
+cvexpect "$CVRM" "bullet has no <!-- roadmap: N --> tag" "an untagged 'Where it's going' bullet"
+CVLN=$(mktemp -d); cvfix "$CVLN"
+grep -v 'agents        -> ' "$CVLN/README.md" > "$CVLN/R2" && mv "$CVLN/R2" "$CVLN/README.md"
+cvexpect "$CVLN" "missing from the README tree's root block: .claude/agents" "a vault-root symlink missing from the root block"
+CVTL=$(mktemp -d); cvfix "$CVTL"
+: > "$CVTL/tools/new-tool.py"
+cvexpect "$CVTL" "tool missing from README tree: tools/new-tool.py" "a non-shell tool missing from the README tree"
+rm -rf "$CVRM" "$CVLN" "$CVTL"
+
 # --- check-coverage: a skill's name must match its directory -------------------
 # A skill is addressed by directory, so a mismatched `name:` does not error — it just
 # never gets picked, which is indistinguishable from the model choosing not to use it.

@@ -22,7 +22,7 @@ once:
 
 So the repo lives at `<vault>/_AI` and *is* the whole OS, while the few things Claude Code
 insists on finding at the vault root are glue pointing straight back into it: a stub that
-`@`-imports the framework, its runtime-neutral twin, an ignore list, and two symlinks into
+`@`-imports the framework, its runtime-neutral twin, an ignore list, and three symlinks into
 the repo. `install.sh` writes that glue
 and then verifies it resolves, which is why those entries are created rather than
 committed. The vault root stays plain-local, and the OS and the harness it runs on are
@@ -42,18 +42,19 @@ It holds symlinks into the repo, where the real files are:
 |---|---|---|
 | `.claude/skills` | `_AI/.claude/skills` | the skills Claude discovers |
 | `.claude/settings.json` | `_AI/.claude/settings.json` | the model pin and the hook registrations |
+| `.claude/agents` | `_AI/.claude/agents` | the subagents skills delegate to |
 
-**Why two links, rather than one link to the whole folder.** Because that folder is shared,
+**Why one link per entry, rather than one link to the whole folder.** Because that folder is shared,
 and the OS is not the only thing writing to it. Claude Code drops a per-machine permission
 file there the first time you approve something permanently. A GUI wrapper drops its own
 settings and session state. An agent or a slash command you write lands there too. Linking
 the folder as a whole would pull every one of those into this repo, where an ignore rule
 would have to hold them back — forever, and against tools nobody has written yet. Linking
-only the two entries the OS owns leaves the rest outside the repo *by construction*, which
+only the entries the OS owns leaves the rest outside the repo *by construction*, which
 is the same reasoning that keeps the vault itself out of git.
 
-**What that costs.** One link per thing the OS wants to version: adding `agents/` or
-`commands/` later is one more `link_into_repo` call in `install.sh`. Two consequences follow.
+**What that costs.** One link per thing the OS wants to version: `agents/` was added
+that way, and `commands/` later would be one more `link_into_repo` call in `install.sh`. Two consequences follow.
 A real folder of that name already sitting at the vault root blocks the link, and
 `install.sh` says so rather than replacing anything you have. And whatever you create at the
 vault root under a name the OS does not link is simply not in git.
@@ -96,7 +97,8 @@ written at install time instead of committed.
 ├── .claudeignore           what Claude Code must not index                     created by install.sh
 ├── .claude/
 │   ├── skills        -> ../_AI/.claude/skills          native skill discovery  created by install.sh
-│   └── settings.json -> ../_AI/.claude/settings.json   model pin + hooks       created by install.sh
+│   ├── settings.json -> ../_AI/.claude/settings.json   model pin + hooks       created by install.sh
+│   └── agents        -> ../_AI/.claude/agents          native subagent discovery  created by install.sh
 │
 └── _AI/                    the git repo — everything below here is the OS
     ├── CLAUDE.md               the framework / "soul"                          generic
@@ -120,7 +122,9 @@ written at install time instead of committed.
     │
     ├── maps/                   orientation — structure, not content            personal
     │   ├── vault-map.md          how your vault is organised
-    │   └── workflow-map.md       which system is authoritative for what
+    │   ├── workflow-map.md       which system is authoritative for what
+    │   ├── advisors-map.md       your advisors, their prompt notes and phone docs
+    │   └── <topic>-map.md        on-demand maps a skill reads (people, finance, meals, …)
     ├── integrations/           a file's existence IS the on-switch             personal
     │   ├── calendar.md           role: calendar
     │   ├── clickup.md            role: task-system
@@ -132,7 +136,7 @@ written at install time instead of committed.
     │
     ├── .claude/                everything Claude Code reads                    generic
     │   ├── settings.json         model pin + hooks; symlinked from the vault root
-    │   ├── hooks/                deny gates, two ask gates, write trace, two Stop hooks
+    │   ├── hooks/                deny and ask gates, write trace, session-start, prompt and Stop hooks (see .claude/README.md)
     │   ├── .gitignore            a whitelist — other programs write here too
     │   ├── agents/               subagents; symlinked from the vault root
     │   │   ├── newsletter-reader.md  reads newsletter threads + its own saved output, nothing else
@@ -167,6 +171,8 @@ written at install time instead of committed.
     │   ├── vault-health.py       vault maintenance: read-only report on frontmatter, descriptions, links, tags, duplicates
     │   ├── vault-health-weekly.sh  the unattended weekly run: report + description proposals into tmp/health/
     │   ├── advisor-stub.py       builds an advisor's paste-ready Claude project stub from its prompt note
+    │   ├── daily-log-stats.py    numbers from the daily-log notes: weekly averages, two-weekly summaries
+    │   ├── garmin-export.py      a Garmin Connect export as a daily CSV, for a health baseline
     │   ├── frontmatter-set.py    the bulk frontmatter writer: checked, snapshotted, logged
     │   └── frontmatter-polish/   propose a description and language per note (local or cloud model); review table
     │
@@ -192,7 +198,9 @@ written at install time instead of committed.
     │   ├── export.sh             clean shareable copy + leak check
     │   ├── leak-check.sh         the scan itself — refuses to run if it cannot find _AI
     │   ├── version.sh            reads and bumps VERSION; used only when releasing
-    │   └── publish.sh            same as export, but preserves public git history
+    │   ├── publish.sh            same as export, but preserves public git history
+    │   ├── scheduled-tasks/      one generic file per optional scheduled run; the setup skill installs them
+    │   └── git-hooks/            pre-commit: the fast coverage check; install.sh wires it in
     │
     ├── .github/workflows/                                                      personal · one exception
     │   ├── verify.yml            gates + public diff on every push; publishes nothing
@@ -232,7 +240,7 @@ safe to re-run:
 `databases/` is not created either: the first `tools/vault-search.py index` makes it (see
 [Vault search](#vault-search)). Deleting it costs a rebuild, nothing else.
 
-The same run also writes the four **vault-root** entries marked in the tree above. They are
+The same run also writes the **vault-root** entries marked *created by install.sh* in the tree above. They are
 the glue described under [Why the files sit where they do](#why-the-files-sit-where-they-do),
 and both symlinks point *into* this repo, so nothing of substance lives outside it.
 
@@ -245,8 +253,10 @@ because these are design decisions, not a backlog of oversights.
   version-controlled in `setup/scheduled-tasks/`, one generic file each, and the `setup`
   skill installs them and checks them against the app. They are: the weekly, read-only vault
   health report ([Vault maintenance](#vault-maintenance)), which writes only to `tmp/`; the
-  weekly newsletter and job-alert digests, which write one note each and never touch the
-  mail; the two-weekly Life Coach summary, which writes proposals only; and two sessions
+  weekday newsletter and job-alert digests, which keep one note per week each and, only under
+  a standing permission recorded in the mail integration file, archive the mail they digested
+  (inbox removal only, keeping what needs a look, with the reason in the note); the
+  two-weekly Life Coach summary, which writes proposals only; and two sessions
   that open and wait for you (the morning daily-log check-in and the quarterly review).
   Everything else starts because a human opened a session: no daemon, no background agent
   watching your calendar.
@@ -255,17 +265,18 @@ because these are design decisions, not a backlog of oversights.
   flatten to plain links on read, so writing the page back replaces every one of them.
   The OS appends, and proposes the rest as text for you to apply. That is less
   automation than was built, kept off on purpose.
-- **Search has to be set up by hand, and the first build is slow.** The index works and
-  is wired in, but no setup step installs it yet, and embedding a vault of about 1,100 notes
-  locally takes 30–90 minutes on a laptop. Without it, the OS falls back to grep.
+- **Search is optional, and the first build is slow.** The `setup` skill offers it and
+  builds it in the background, but embedding a vault of about 1,100 notes locally takes
+  30–90 minutes on a laptop. Without it, the OS falls back to grep.
 - **Learning is human-gated, and new.** A retro pass reads a session's own transcript
   rather than its summary of itself, and routes what it finds: a fact about a tool into
   that tool's integration file, a workflow step into a skill, a mechanisable rule into a
   hook *with a test*. Only a **disposition that has recurred** earns an always-on rule,
   because everything in the framework file is loaded every session. Every change is a
-  diff the human approves. It does work — three lessons have reached files that are
-  actually read, and one caught its own author an hour after being promoted — but it has
-  run a handful of times, all in sessions that also built it.
+  diff the human approves. It does work: over its first two months the ledger gathered
+  around forty lessons, most of them now living in the skill, hook or integration file they
+  were about, and one caught its own author an hour after being promoted. But every lesson
+  so far came from one user's sessions, most of them sessions that were also building the OS.
 - **n=1.** One user, a few months of history. Everything above is one person's
   experience, not a validated design.
 
@@ -274,22 +285,28 @@ because these are design decisions, not a backlog of oversights.
 Direction rather than plan — no dates, no ordering, and the detailed roadmap stays
 private because its reasoning is entangled with one person's circumstances.
 
-- **A vault health check.** The first bulk pass (a `description` on every note, see
-  [Note metadata](#note-metadata-descriptions-and-sensitivity)) worked. The next one is
-  read-only: broken links, orphans, likely duplicates, drifted tags, descriptions gone stale,
-  and frontmatter that doesn't parse. Detection is a script; only fixes need a model, and
-  every fix needs a yes.
+- **The repair layer of vault maintenance.** The weekly health report
+  ([Vault maintenance](#vault-maintenance)) detects; repair is still mostly by hand. Next:
+  link-fix and orphan proposals drawn from the search index, and descriptions applied
+  without review for unlabelled notes once enough weekly sheets came back clean.
+  <!-- roadmap: 46 -->
 - **Closing the gaps in the sensitivity boundary.** Labels exist and the Read gate asks
   before opening a labelled note. Grep and shell reads still go around it, because a
-  shell command's target is a string no hook can read reliably.
-- **Search in the setup flow**, plus an optional cloud embedder for faster builds that
-  skips private and secret notes by construction.
+  shell command's target is a string no hook can read reliably. <!-- roadmap: 8 -->
+- **Guardrails that do not depend on the harness.** The gates are Claude Code hooks, so
+  another runtime opening the vault meets none of them. Moving the policy into a vault
+  gateway (an MCP server every runtime has to go through) makes it the boundary rather
+  than a convention. <!-- roadmap: 48 -->
 - **A way to test behaviour that lives in prose.** The learning loop stays human-gated
   precisely because nothing can yet catch a behavioural regression automatically: a
   capable agent's failure mode is not an error, it is a plausible artifact. Rules that
   can be mechanised keep moving into hooks, which have tests and cannot be argued out of
   their answer; what is left is judgment, and the human gate is the design rather than
-  caution about it.
+  caution about it. <!-- roadmap: 35 -->
+
+Each bullet carries a hidden `roadmap:` tag naming the private roadmap item behind it, and
+`check-coverage.sh` fails once that item is marked done, so this list cannot go on
+promising something that already shipped.
 
 ## Prerequisites
 
@@ -341,7 +358,7 @@ Then:
 
 ```bash
 # from the vault root
-bash _AI/setup/install.sh          # root stub, .claudeignore, skills symlink, git init
+bash _AI/setup/install.sh          # root stub, .claudeignore, symlinks, git init + pre-commit check
 # fill in me.md / maps if freshly scaffolded
 claude                             # start a session, then run the setup skill
 ```
@@ -646,6 +663,22 @@ about 15 s on 1,100 notes. Proposals accumulate in `tmp/health/proposals.jsonl`,
 proposed once, and a proposal that failed (Ollama down) is retried the next week. Settings live
 in `config/vault-health.local`.
 
+## Daily log
+
+The `daily-log` skill is a spoken check-in: you talk for a minute or two about the
+previous day, and it writes one daily note whose frontmatter is the data (mood, energy,
+sleep, movement, people, work and more), asking only for what you left out. The schema is
+not in the skill but in `maps/daily-log-map.md`, so the fields are yours to choose; without
+that map the skill says it is not set up rather than inventing any. Calendar events and,
+if you have a wearable integration, watch data are offered as suggestions, never filled
+into a rating.
+
+`tools/daily-log-stats.py` turns the notes into numbers the same way every time: a weekly
+averages line for the Monday review, and a two-weekly summary that compares days by
+factor, each number with its n. An advisor reads the summary and does the interpreting
+(see below); the script never does. The notes are private by folder label, and the
+optional scheduled check-in only opens a session and waits for you.
+
 ## Advisors: Claude projects as front-ends to the vault
 
 A Claude Desktop project is a good home for a long-running advisor (a coach, a therapist
@@ -737,6 +770,11 @@ in `.claude/skills/phone/SKILL.md`.
 - **Change a hook** in `_AI/.claude/hooks/`, then run `sh tests/run.sh`. Settings edits are picked up live — no restart. Write commands as `"\"${CLAUDE_PROJECT_DIR}/_AI/.claude/hooks/x.sh\""`: braced *and* quoted, because an unquoted path containing a space fails silently.
 - **Share something new with Claude Code** — a project agent, a slash command — by putting it in `_AI/.claude/<thing>/` and adding one `link_into_repo` line to `install.sh`. Without the link it lives only at the vault root, outside git.
 - **Git lives in `_AI/`**, not the vault root. Run every git command from there.
+- **Every commit runs `check-coverage.sh`** through `setup/git-hooks/pre-commit`
+  (`install.sh` sets `core.hooksPath`). It takes about a second and refuses a commit that
+  leaves the README tree, the hook registrations, the export list or the roadmap out of
+  step with what exists. The full suite (`tests/run.sh`, about a minute) runs before every
+  publish and in CI instead, because a slow commit hook gets skipped with `--no-verify`.
 - **The AI logs its own changes to vault files outside `_AI/`** in `history/file-log.md`. Changes inside `_AI/` are covered by git history instead.
 
 ## Sharing your copy
@@ -856,6 +894,10 @@ diff against these, in order:
 5. **Paths that expose vault structure** beyond what `templates/` already shows.
 6. **Tone** — text written *to* you rather than *for* a reader. Not a leak, but it
    reads as unfinished in a public repo.
+7. **Is this README still true?** `publish.sh` lists every commit since the README last
+   changed that touched skills, hooks, tools, setup, templates or `CLAUDE.md`, and will not
+   push until you say the README was read against them. A list of names can be checked by a
+   script (`check-coverage.sh` does); whether a sentence is still true cannot.
 
 Claude can do this reading and report, so a clean sync costs you a yes. It is a
 good first pass at 1–5 and an unreliable judge of what *you* consider private:

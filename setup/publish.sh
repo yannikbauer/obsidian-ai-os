@@ -22,6 +22,7 @@
 #   ./publish.sh --branch sync/main push to a branch instead, for review via PR
 #   ./publish.sh --version minor    cut a release: bump VERSION, tag, write CHANGELOG
 #   ./publish.sh --notes FILE       use FILE as the changelog entry and commit body
+#   ./publish.sh --readme-reviewed  the README was read against the commits it lists (no-tty runs)
 #
 # A RELEASE is a separate act from a publish. Publishing syncs content; releasing
 # gives that content a name a fork can refer to. Interactive runs are asked once;
@@ -127,6 +128,7 @@ ASSUME_YES=0
 BRANCH=""
 VERSION_ARG=""
 NOTES=""
+README_REVIEWED=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
@@ -149,6 +151,7 @@ while [ $# -gt 0 ]; do
       NOTES="$1"
       ;;
     --notes=*) NOTES="${1#--notes=}" ;;
+    --readme-reviewed) README_REVIEWED=1 ;;
     *) echo "! unknown argument: $1" >&2; exit 64 ;;
   esac
   shift
@@ -185,6 +188,66 @@ echo "  from   : $AI_DIR"
 echo "  to     : $PUBLIC_REMOTE"
 [ "$DRY_RUN" -eq 1 ] && echo "  mode   : DRY RUN (nothing will be pushed)"
 echo
+
+# --- 0. the OS must still describe itself truthfully -------------------------
+# a) The full test suite, which includes check-coverage.sh. Until 2026-11-11 only CI ran it,
+#    after a push to the private repo, so a local publish could ship a README tree that
+#    the very next CI run would call wrong. publish.yml sets AIOS_TESTS_PASSED=1 because it
+#    has just run the suite itself; nothing else should.
+if [ "${AIOS_TESTS_PASSED:-0}" != "1" ]; then
+  echo "Running tests/run.sh (about a minute)..."
+  if ! bash "$AI_DIR/tests/run.sh" >"$WORK/tests.log" 2>&1; then
+    grep -E 'FAIL|^  [^ ]' "$WORK/tests.log" | grep -v '^  ok ' >&2 || cat "$WORK/tests.log" >&2
+    echo "! tests/run.sh failed — nothing was published." >&2
+    exit 1
+  fi
+  echo "  tests passed"
+  echo
+fi
+
+# b) Prose drift. check-coverage proves the README NAMES everything; it cannot tell
+#    whether a sentence is still true. What a script can do is say where to look: every
+#    commit since the README last changed that touched the machinery it describes. An
+#    empty list passes silently. A non-empty one needs a human (or a session reading on
+#    the human's behalf) to say the README was read against it. Roadmap #32.
+#    Known limit: any README edit resets the baseline, so a one-word fix "covers" every
+#    earlier commit. The list is a pointer, not proof.
+README_BASE="$(cd "$AI_DIR" && git log -1 --format=%h -- README.md 2>/dev/null || true)"
+README_DRIFT=""
+if [ -n "$README_BASE" ]; then
+  README_DRIFT="$(cd "$AI_DIR" && git log --reverse --format='  %h %s' "${README_BASE}..HEAD" -- \
+                  CLAUDE.md .claude/skills .claude/hooks .claude/agents .claude/settings.json \
+                  tools setup templates 2>/dev/null || true)"
+fi
+if [ -n "$README_DRIFT" ]; then
+  echo "Commits since the README last changed ($README_BASE) that touch what it describes:"
+  printf '%s\n' "$README_DRIFT"
+  echo
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "  (dry run: a real publish will ask whether the README was read against these)"
+  elif [ "$README_REVIEWED" -eq 1 ]; then
+    echo "  --readme-reviewed given: README read against the list above."
+  elif [ "$ASSUME_YES" -eq 1 ]; then
+    # CI: the person who dispatched the workflow cannot answer a prompt. Say it loudly
+    # in the log and the run summary rather than block every CI publish.
+    echo "  ! README NOT confirmed against these commits (--yes). Review it before the next publish."
+    [ -n "${GITHUB_STEP_SUMMARY:-}" ] && {
+      echo "### README not reviewed against these commits"; echo '```'; printf '%s\n' "$README_DRIFT"; echo '```'
+    } >> "$GITHUB_STEP_SUMMARY"
+  elif ( : </dev/tty ) 2>/dev/null; then
+    printf 'Has the README been read against these and updated where needed? [y/N] '
+    read -r rr </dev/tty
+    case "$rr" in
+      [yY]|[yY][eE][sS]) ;;
+      *) echo "Aborted. Update README.md (or confirm it is still true), then publish again."; exit 0 ;;
+    esac
+  else
+    echo "! The README has not been confirmed against the commits above, and there is no" >&2
+    echo "! terminal to ask. Read it against them, then re-run with --readme-reviewed." >&2
+    exit 65
+  fi
+  echo
+fi
 
 # --- 1. export (this is where the leak check runs) ---------------------------
 # export.sh exits 2 on a leak; set -e turns that into an abort here, before the

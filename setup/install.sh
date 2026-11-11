@@ -92,9 +92,9 @@ else
   echo "• created .claudeignore"
 fi
 
-# --- 3. the two symlinks into the repo ---------------------------------------
-# Both point at _AI/.claude/, so the skills Claude discovers and the settings it runs
-# on are the ones under version control.
+# --- 3. the symlinks into the repo -------------------------------------------
+# All point at _AI/.claude/, so the skills Claude discovers, the settings it runs on
+# and the subagents it delegates to are the ones under version control.
 #
 # RETARGETING IS THE POINT, not an afterthought. Until 2026-09-09 these lived at
 # _AI/skills and _AI/harness/settings.json. An upgrade that found an existing symlink
@@ -184,6 +184,20 @@ if [ -d "$AI_DIR/.git" ]; then
   echo "• _AI git repo already initialized"
 else
   ( cd "$AI_DIR" && git init -q && echo "• git init in _AI/" )
+fi
+
+# The pre-commit check lives in setup/git-hooks/ so it is versioned; .git/hooks/ is not.
+# Only set hooksPath when nothing else claims it: someone who already points it elsewhere
+# keeps their own hooks and is told how to add this one.
+_hp=$(cd "$AI_DIR" && git config --get core.hooksPath || true)
+if [ -z "$_hp" ]; then
+  ( cd "$AI_DIR" && git config core.hooksPath setup/git-hooks ) \
+    && echo "• pre-commit check enabled (core.hooksPath = setup/git-hooks)"
+elif [ "$_hp" = "setup/git-hooks" ]; then
+  echo "• pre-commit check already enabled"
+else
+  echo "! core.hooksPath is already '$_hp' — not changed. To add the check, call"
+  echo "!   setup/git-hooks/pre-commit from your own pre-commit hook."
 fi
 
 # --- 6. verify the install actually works ------------------------------------

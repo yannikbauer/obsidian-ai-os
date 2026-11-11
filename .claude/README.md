@@ -116,6 +116,13 @@ check-in once. Off unless `maps/daily-log-map.md` carries a
 `<!-- daily-log-note-path: … -->` line (a strftime pattern), so the hook names no folder.
 Once a day (`tmp/nudged-daily-<date>`), not before 07:00. It offers; it runs nothing.
 
+## Time stamp: `inject-time.sh`
+
+**`inject-time.sh`** (UserPromptSubmit) adds the local date and time to every user message
+as one context line, so time-of-day statements come from the clock, not from the
+conversation (L039). About 25 tokens a prompt; fails open. Surfaces without hooks (Claude
+Desktop projects) are covered by a *Time and date* section in each advisor prompt instead.
+
 ## Housekeeping: `prune-session-state.sh`
 
 **`prune-session-state.sh`** (SessionStart, `startup`) moves hook markers in `tmp/`
