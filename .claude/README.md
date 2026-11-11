@@ -1,9 +1,9 @@
 # `.claude/` — everything Claude Code reads
 
 The settings the OS runs on, the hooks that enforce its safety rules, and the skills it
-discovers. The vault root's `.claude/skills` and `.claude/settings.json` symlink in here,
-so the configuration Claude Code runs on is version-controlled alongside the OS it runs.
-`install.sh` creates both links, and repoints them if they are stale.
+discovers. The vault root's `.claude/skills`, `.claude/settings.json` and `.claude/agents`
+symlink in here, so the configuration Claude Code runs on is version-controlled alongside the
+OS it runs. `install.sh` creates the links, and repoints them if they are stale.
 
 **What belongs here:** the OS's own configuration — the model pin, the hooks, the skills.
 

@@ -175,6 +175,34 @@ if [ $? -eq 0 ]; then echo "  ok   bash vault gate: fails open on bad input"
 else echo "  FAIL bash vault gate: bad input did not fail open" >&2; FAIL=1; fi
 rm -rf "$BTMP"
 
+# --- leak-check --names: people's names in commit subjects (L042) -------------
+# Private commit subjects name people freely, and the export's file scan never sees them.
+# --names reads the names from the user's own maps; the fixture uses invented ones.
+NTMP=$(mktemp -d)
+mkdir -p "$NTMP/_AI/setup" "$NTMP/_AI/maps"
+cp "$HOOKS/../setup/leak-check.sh" "$NTMP/_AI/setup/"
+printf '# framework\n' > "$NTMP/_AI/CLAUDE.md"
+printf '%s\n' '# People' '- **Zorrian** (Zed) — friend. Somewhere.' '- **Mapping notes:** not a name' > "$NTMP/_AI/maps/people-map.md"
+printf '%s\n' '- **Router note:** persona "Quillon" (only inside its prompt).' > "$NTMP/_AI/maps/advisors-map.md"
+nexpect() { # nexpect <want-exit> <subject> <label> [--names]
+  printf '%s\n' "$2" > "$NTMP/s.txt"
+  bash "$NTMP/_AI/setup/leak-check.sh" $4 "$NTMP/s.txt" >/dev/null 2>&1
+  ngot=$?
+  if [ "$ngot" -eq "$1" ]; then echo "  ok   leak-check --names: $3"
+  else echo "  FAIL leak-check --names: $3 — wanted exit $1, got $ngot" >&2; FAIL=1; fi
+}
+nexpect 2 "people map: Zorrian corrected" "a bold name from the people map" --names
+nexpect 2 "note for Zed"                  "an alias in parentheses" --names
+nexpect 2 "daily-log: Quillon reads it"   "an advisor persona name" --names
+nexpect 0 "Mapping fix for zorrian-like"  "a label, and a lowercase word, are not names" --names
+nexpect 0 "people map: Zorrian corrected" "without --names, names are not checked"
+nout=$(printf 'Zorrian\n' > "$NTMP/s.txt"; bash "$NTMP/_AI/setup/leak-check.sh" --names "$NTMP/s.txt" 2>&1)
+case "$nout" in
+  *Quillon*) echo "  FAIL leak-check --names printed the name list" >&2; FAIL=1 ;;
+  *) echo "  ok   leak-check --names reports the source, not the list of names" ;;
+esac
+rm -rf "$NTMP"
+
 # --- setup/leak-check.sh path resolution (roadmap #36) ---------------------
 # The harness covers hooks and tools/; setup/ was covered by nothing, and this
 # script is the gate between the vault and a public repository. Its failure mode
@@ -561,6 +589,19 @@ if [ -s "$DTMP/_AI/tmp/denies-dsid.log" ]; then echo "  ok   deny() writes tmp/d
 else echo "  FAIL deny() left no trace for suggest-retro to read" >&2; FAIL=1; fi
 
 
+# --- session-digest: a subagent's hand-back is not the human speaking (L041) -----
+# Peer messages arrive as user-role entries with promptSource "system". Counting them put
+# a subagent's review report ("...not what I needed...") into the corrections.
+PTMP=$(mktemp -d)
+printf '%s\n' \
+  '{"type":"user","promptSource":"typed","message":{"role":"user","content":"publish it"}}' \
+  '{"type":"user","promptSource":"system","isMeta":true,"message":{"role":"user","content":"no, that is wrong"}}' \
+  > "$PTMP/t.jsonl"
+pc=$("$HOOKS/../tools/session-digest.sh" --json --transcript "$PTMP/t.jsonl" 2>/dev/null | /usr/bin/jq -r .corrections)
+[ "$pc" = "0" ] && echo "  ok   session-digest ignores a subagent hand-back as a correction" \
+                || { echo "  FAIL session-digest counted a peer message as a human correction — got ${pc:-<none>}" >&2; FAIL=1; }
+rm -rf "$PTMP"
+
 # --- session-digest: "wrote a framework file" is an act, not a tool ------------
 # Regression guard. Counting only Write/Edit reported ZERO framework writes for the
 # session that built the digest, because that session edited through Bash heredocs.
@@ -689,7 +730,7 @@ fi
 # command from a real one.
 CVTMP=$(mktemp -d)
 cp -R "$HOOKS/../tools" "$HOOKS/../setup" "$HOOKS/../.claude" \
-      "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$CVTMP/" 2>/dev/null
+      "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$HOOKS/../guide" "$HOOKS/../LICENSE" "$HOOKS/../NOTICE" "$CVTMP/" 2>/dev/null
 if ( cd "$CVTMP" && ./tools/check-coverage.sh >/dev/null 2>&1 ); then
   echo "  ok   check-coverage passes on a complete tree"
 else
@@ -698,7 +739,7 @@ else
 fi
 
 # Delete one skill from the README's tree block only — it stays mentioned in prose.
-grep -v '├── retro/' "$CVTMP/README.md" > "$CVTMP/README.trimmed" && mv "$CVTMP/README.trimmed" "$CVTMP/README.md"
+grep -v '├── retro/' "$CVTMP/guide/architecture.md" > "$CVTMP/A2" && mv "$CVTMP/A2" "$CVTMP/guide/architecture.md"
 if ( cd "$CVTMP" && ./tools/check-coverage.sh >/dev/null 2>&1 ); then
   echo "  FAIL check-coverage missed a skill absent from the README tree" >&2; FAIL=1
 else
@@ -711,8 +752,8 @@ fi
 # scratch copy, so the deletion above cannot mask the result.
 CVROOT=$(mktemp -d)
 cp -R "$HOOKS/../tools" "$HOOKS/../setup" "$HOOKS/../.claude" \
-      "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$CVROOT/" 2>/dev/null
-grep -v '\.claudeignore' "$CVROOT/README.md" > "$CVROOT/R2" && mv "$CVROOT/R2" "$CVROOT/README.md"
+      "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$HOOKS/../guide" "$CVROOT/" 2>/dev/null
+grep -v '\.claudeignore' "$CVROOT/guide/architecture.md" > "$CVROOT/A2" && mv "$CVROOT/A2" "$CVROOT/guide/architecture.md"
 cvrout=$(cd "$CVROOT" && sh tools/check-coverage.sh 2>&1)
 case "$cvrout" in
   *"vault-root file written by install.sh is missing from README tree"*)
@@ -726,7 +767,7 @@ esac
 # _AI/.claude/. Each fixture breaks exactly one of them in its own scratch copy.
 cvfix() { # cvfix <dir>: a complete scratch copy with a minimal roadmap
   cp -R "$HOOKS/../tools" "$HOOKS/../setup" "$HOOKS/../.claude" \
-        "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$1/" 2>/dev/null
+        "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$HOOKS/../guide" "$1/" 2>/dev/null
   mkdir -p "$1/docs"
   {
     printf '## Next\n\n### 46. Repair · S\n\n### 8. Sensitivity · S\n\n### 48. Gateway · M\n\n### 35. Evals · M\n\n'
@@ -748,19 +789,27 @@ cvexpect "$CVRM" "still promises roadmap item #12, which is Done" "a README prom
 sed 's/ <!-- roadmap: 8 -->//' "$CVRM/README.md" > "$CVRM/R2" && mv "$CVRM/R2" "$CVRM/README.md"
 cvexpect "$CVRM" "bullet has no <!-- roadmap: N --> tag" "an untagged 'Where it's going' bullet"
 CVLN=$(mktemp -d); cvfix "$CVLN"
-grep -v 'agents        -> ' "$CVLN/README.md" > "$CVLN/R2" && mv "$CVLN/R2" "$CVLN/README.md"
+grep -v 'agents        -> ' "$CVLN/guide/architecture.md" > "$CVLN/A2" && mv "$CVLN/A2" "$CVLN/guide/architecture.md"
 cvexpect "$CVLN" "missing from the README tree's root block: .claude/agents" "a vault-root symlink missing from the root block"
 CVTL=$(mktemp -d); cvfix "$CVTL"
 : > "$CVTL/tools/new-tool.py"
 cvexpect "$CVTL" "tool missing from README tree: tools/new-tool.py" "a non-shell tool missing from the README tree"
-rm -rf "$CVRM" "$CVLN" "$CVTL"
+CVGD=$(mktemp -d); cvfix "$CVGD"
+printf '# Orphan\n' > "$CVGD/guide/orphan.md"
+cvexpect "$CVGD" "guide not linked from the README: guide/orphan.md" "a guide nobody links to"
+sed 's|guide/tools.md#connectors|guide/tools.md#no-such-heading|' "$CVGD/README.md" > "$CVGD/R2" && mv "$CVGD/R2" "$CVGD/README.md"
+cvexpect "$CVGD" "(no such heading)" "a README link to a heading that moved"
+CVBG=$(mktemp -d); cvfix "$CVBG"
+awk '{print} /^## Design principles/{for(i=0;i<60;i++) print "- filler"}' "$CVBG/README.md" > "$CVBG/R2" && mv "$CVBG/R2" "$CVBG/README.md"
+cvexpect "$CVBG" "README section over its budget" "a README section that should be a guide"
+rm -rf "$CVRM" "$CVLN" "$CVTL" "$CVGD" "$CVBG"
 
 # --- check-coverage: a skill's name must match its directory -------------------
 # A skill is addressed by directory, so a mismatched `name:` does not error — it just
 # never gets picked, which is indistinguishable from the model choosing not to use it.
 CVSK=$(mktemp -d)
 cp -R "$HOOKS/../tools" "$HOOKS/../setup" "$HOOKS/../.claude" \
-      "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$CVSK/" 2>/dev/null
+      "$HOOKS/../templates" "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$HOOKS/../guide" "$CVSK/" 2>/dev/null
 sed 's/^name: retro$/name: retrospective/' "$CVSK/.claude/skills/retro/SKILL.md" > "$CVSK/S2" \
   && mv "$CVSK/S2" "$CVSK/.claude/skills/retro/SKILL.md"
 cvsout=$(cd "$CVSK" && sh tools/check-coverage.sh 2>&1)
@@ -793,10 +842,11 @@ esac
 # So this fixture is the published SHAPE: an export plus a changelog, under git.
 PUBTMP=$(mktemp -d)
 cp -R "$HOOKS/../tools" "$HOOKS/../setup" "$HOOKS/../.claude" "$HOOKS/../templates" \
-      "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$PUBTMP/" 2>/dev/null
+      "$HOOKS/../CLAUDE.md" "$HOOKS/../README.md" "$HOOKS/../guide" \
+      "$HOOKS/../LICENSE" "$HOOKS/../NOTICE" "$PUBTMP/" 2>/dev/null
 printf '# Changelog\n\n## v0.0.0 — 1970-01-01\n\n- Initial tagged release.\n' > "$PUBTMP/CHANGELOG.md"
 ( cd "$PUBTMP" && git init -q >/dev/null 2>&1 \
-  && git add CHANGELOG.md CLAUDE.md README.md tools setup templates .claude >/dev/null 2>&1 )
+  && git add CHANGELOG.md CLAUDE.md README.md guide LICENSE NOTICE tools setup templates .claude >/dev/null 2>&1 )
 pubout=$(cd "$PUBTMP" && sh tools/check-coverage.sh 2>&1)
 if [ -z "$pubout" ]; then
   echo "  ok   check-coverage passes on the published shape (export + CHANGELOG, tracked)"

@@ -1,282 +1,137 @@
 # AI OS
 
-A personal AI operating system built on an Obsidian vault, driven by Claude Code. It gives an AI assistant a persistent identity, a map of your vault and tools, and a set of skills — including a `personal-assistant` orchestrator that runs cross-tool workflows over Obsidian (the always-present notes substrate) plus whichever task-system, calendar, and mail tools you configure.
+A personal AI operating system built on an Obsidian vault, driven by Claude Code. It gives
+Claude a lasting picture of who you are, a map of your notes, and skills that work across
+your notes and whichever task system, calendar and mail you connect: plan the week, digest
+the inbox, log the day, keep the vault tidy. Every change to your notes, tasks or calendar
+asks you first.
 
-Designed to be **generic and shareable**: the framework contains no personal data. Your identity (`me.md`), vault layout (`maps/`), and tool specifics (`integrations/`) are kept separate and private.
+Designed to be **generic and shareable**: the framework contains no personal data. Your
+identity (`me.md`), vault layout (`maps/`), and tool specifics (`integrations/`) are kept
+separate and private.
 
-## Layout
+This page is the overview. Each feature links to a guide in [`guide/`](guide/) with the
+details.
 
-### Why the files sit where they do
+## A week with it
 
-Three constraints pull against each other, and the layout is what satisfies all three at
-once:
+Monday morning the newsletter and job digests are already in the vault, and the inbox holds
+only the mails they kept for a reason. "Plan my week" reads the calendar, the task system, the
+goals and the digests' deadlines, and proposes the week. Each morning a short spoken check-in
+becomes a daily note with numbers in it. During a call, "what should I ask?" reads the meeting
+transcript so far. On a walk, the same session answers from the phone, because the Mac at home
+stays reachable. Every write to your notes, tasks or calendar waits for your yes, and the rules
+that matter most are enforced by scripts, not by the model's good intentions.
 
-1. **Claude Code treats the project root as its world.** `CLAUDE.md`, `.claude/`, the
-   hooks and the permission boundary are all anchored there. For the OS to work on your
-   notes, that root has to be the vault.
-2. **Git must not cover your notes.** Hundreds of personal notes and a folder of binaries
-   do not belong in a repo built to be forked and published, and one blanket `git add` in
-   a vault-wide repo would leak them irreversibly.
-3. **The framework has to stay forkable as one self-contained repo**, so nothing it needs
-   may live outside it.
+## What's inside
 
-So the repo lives at `<vault>/_AI` and *is* the whole OS, while the few things Claude Code
-insists on finding at the vault root are glue pointing straight back into it: a stub that
-`@`-imports the framework, its runtime-neutral twin, an ignore list, and three symlinks into
-the repo. `install.sh` writes that glue
-and then verifies it resolves, which is why those entries are created rather than
-committed. The vault root stays plain-local, and the OS and the harness it runs on are
-version-controlled together.
+**Notes.** Every note carries a one-line `description` and, where needed, a sensitivity label.
+Search by meaning runs locally (an English question finds a German note), and a weekly
+read-only health report finds broken links, duplicates and descriptions gone stale.
+→ [Notes: metadata, search and maintenance](guide/notes.md)
 
-### The two `.claude/` folders, and what links them
+**The week.** Weekday digests of newsletters and job alerts, with an inbox you can trust
+afterwards; transcripts distilled into decisions and follow-ups, plus a live check during a
+call; meal planning against the calendar; read-only finance snapshots.
+→ [Everyday skills](guide/everyday.md)
 
-There are two of them, and the tree below is confusing until you know why.
+**Daily log.** A minute of talk about yesterday becomes one structured note; watch data and
+the calendar are offered as suggestions, and a script turns the notes into weekly numbers.
+→ [Daily log](guide/daily-log.md)
 
-Claude Code only ever looks for `.claude/` at the **project root**, which here is the vault.
-But everything that belongs in it — the skills, the hooks, the settings the OS runs on — has
-to live inside `_AI/`, or it is not version-controlled and cannot be shared. Those two
-requirements point at two different places, so the vault-root one holds nothing of its own.
-It holds symlinks into the repo, where the real files are:
+**Advisors.** A coach, a therapist persona, a chef: each defined once, in a vault note. On the
+computer an advisor works with the whole vault; on the phone the same advisor runs in a Claude
+project from a generated stub, and what it learns there flows back.
+→ [Advisors](guide/advisors.md)
 
-| At the vault root | points into the repo at | which holds |
-|---|---|---|
-| `.claude/skills` | `_AI/.claude/skills` | the skills Claude discovers |
-| `.claude/settings.json` | `_AI/.claude/settings.json` | the model pin and the hook registrations |
-| `.claude/agents` | `_AI/.claude/agents` | the subagents skills delegate to |
+**Always on.** The Claude desktop app's Remote Control lets the Claude app on your phone
+drive a session running on your Mac. Keep the Mac awake, and the phone reaches a full
+session with the vault behind it, and scheduled tasks do their work while you are away.
+→ [Always on: the vault from your phone](guide/always-on.md)
 
-**Why one link per entry, rather than one link to the whole folder.** Because that folder is shared,
-and the OS is not the only thing writing to it. Claude Code drops a per-machine permission
-file there the first time you approve something permanently. A GUI wrapper drops its own
-settings and session state. An agent or a slash command you write lands there too. Linking
-the folder as a whole would pull every one of those into this repo, where an ignore rule
-would have to hold them back — forever, and against tools nobody has written yet. Linking
-only the entries the OS owns leaves the rest outside the repo *by construction*, which
-is the same reasoning that keeps the vault itself out of git.
+**Phone mirror.** The OS can read (and, one confirmed action at a time, operate) apps on an
+Android phone through a mirror window on the Mac. → [Phone mirror](guide/phone-mirror.md)
 
-**What that costs.** One link per thing the OS wants to version: `agents/` was added
-that way, and `commands/` later would be one more `link_into_repo` call in `install.sh`. Two consequences follow.
-A real folder of that name already sitting at the vault root blocks the link, and
-`install.sh` says so rather than replacing anything you have. And whatever you create at the
-vault root under a name the OS does not link is simply not in git.
+**Safety and learning.** Hooks deny or ask before the risky moves; email is data, never
+instructions; after a session that taught something, the `retro` skill turns the correction
+into a change to the right file; and the docs are
+checked against the code on every commit and publish.
+→ [Safety and learning](guide/safety-and-learning.md)
 
-**The exception, which neither arrangement fixes.** `skills/` is linked as a whole folder, so
-a skill that any tool installs into this project lands inside this repo. `.claude/.gitignore`
-and the `.claude/` walk in `check-coverage.sh` exist for exactly that: the ignore rule admits
-only the shapes the OS ships, and the walk reports anything under `.claude/` that is neither
-tracked nor deliberately declared.
+## How it is put together
 
-### Why skills and integrations are separate
+The OS is a git repo at `<vault>/_AI`. The vault itself stays out of git; a few entries at the
+vault root (a stub `CLAUDE.md` that imports the framework, and symlinks into `_AI/.claude/`)
+let Claude Code find it. A **skill** holds generic logic ("how to operate a task system");
+an **integration file** in `integrations/` holds your specifics (list ids, calendars), and its
+existence is what switches a tool on. Skills load only when used, and read their integration
+file only at that point, so the always-on core stays small.
+→ [Architecture](guide/architecture.md) · [Tools, connectors and interfaces](guide/tools.md)
 
-A skill holds **generic logic** — how to operate a task system, not which lists you use.
-Everything specific to you lives in `integrations/<tool>.md`, one file per tool, and those
-files never ship. Two things fall out of that split, and the second is the one people miss:
+## Prerequisites
 
-- **It is what makes the skills shareable at all.** A skill with your list ids, folder
-  names and doc urls baked in is personal data wearing a capability's clothes. Strip it
-  and there is nothing generic left to publish.
-- **Token economy.** A skill reads its integration file *at the point of use*, so a
-  session that never touches your task system never loads your task-system setup.
-  Hardcoded, every skill would be longer and would carry your whole configuration into
-  every session that so much as mentions it.
+- **Claude Code** (`npm i -g @anthropic-ai/claude-code`, or the desktop app); `claude --version`.
+- **git**, and **`jq`** at `/usr/bin/jq` (shipped with recent macOS); the safety hooks need it.
+- An **Obsidian vault** that is not itself a git repo.
+- *Optional:* **`uv`** and **Ollama** with `bge-m3`, for [vault search](guide/notes.md#vault-search).
+- A **Claude account** with connectors for mail, calendar and tasks, if you want those roles
+  ([Connectors](guide/tools.md#connectors)).
 
-The same file is also the **on-switch**: a tool is configured if and only if
-`integrations/<tool>.md` exists. A skill that resolves a role and finds no file degrades
-and says so, rather than describing a tool you do not have. `CLAUDE.md` states the rule
-under *Layered design*; the tree below is the shape it produces on disk.
+No Obsidian plugin is required; Templater, Periodic Notes and Tasks are assumed by the bundled
+workflows, and each degrades in a named way ([Obsidian plugins](guide/tools.md#obsidian-plugins--none-required-several-assumed)).
 
-The right-hand column answers one question for every entry: where it comes from, and who
-gets to see it. **generic** ships in the shared export, **personal** never does,
-**gitignored** is not tracked at all, and **created by install.sh** marks the glue that is
-written at install time instead of committed.
+## Quick start
 
-```
-<vault>/                    your Obsidian vault — deliberately NOT a git repo
-│
-├── CLAUDE.md               stub; @-imports CLAUDE.md, me.md, vault-map.md      created by install.sh
-├── AGENTS.md               the same pointer, for non-Claude runtimes           created by install.sh
-├── .claudeignore           what Claude Code must not index                     created by install.sh
-├── .claude/
-│   ├── skills        -> ../_AI/.claude/skills          native skill discovery  created by install.sh
-│   ├── settings.json -> ../_AI/.claude/settings.json   model pin + hooks       created by install.sh
-│   └── agents        -> ../_AI/.claude/agents          native subagent discovery  created by install.sh
-│
-└── _AI/                    the git repo — everything below here is the OS
-    ├── CLAUDE.md               the framework / "soul"                          generic
-    ├── me.md                   who you are, how to work with you               personal
-    ├── VERSION                 the version a fork has; nothing else states it  generic
-    ├── LICENSE                 Apache-2.0 — without it, nobody may reuse       generic
-    ├── NOTICE                  attribution that redistributions must keep      generic
-    ├── CONTRIBUTING.md         the generic/personal rule, DCO, licence grant   generic
-    │
-    ├── config/                 the knobs — one folder, one lifecycle           personal · never exported
-    │   ├── leak-patterns.local     identifiers the export scans for
-    │   ├── leak-allow.local        literals that are deliberately public
-    │   ├── publish.local           where to publish, and as whom
-    │   ├── readonly-zones.local    folders the AI must never write into
-    │   ├── correction-words.local  what counts as you correcting the AI
-    │   ├── clickup-replace-allow.local  doc pages the AI may rewrite whole
-    │   ├── sensitivity.local       folders whose notes are private or secret
-    │   ├── search-index.local      what the search index skips, and which folders are third-party
-    │   ├── vault-health.local      what the health check skips, and its duplicate threshold
-    │   └── README.md               what reads each knob, and how each one degrades
-    │
-    ├── maps/                   orientation — structure, not content            personal
-    │   ├── vault-map.md          how your vault is organised
-    │   ├── workflow-map.md       which system is authoritative for what
-    │   ├── advisors-map.md       your advisors, their prompt notes and phone docs
-    │   └── <topic>-map.md        on-demand maps a skill reads (people, finance, meals, …)
-    ├── integrations/           a file's existence IS the on-switch             personal
-    │   ├── calendar.md           role: calendar
-    │   ├── clickup.md            role: task-system
-    │   ├── gmail.md              role: mail
-    │   ├── macwhisper.md         role: transcription
-    │   ├── phone.md              role: phone — the mirror app, modes, start checklist, troubleshooting
-    │   ├── <budgeting-app>.md    no role — an app on the phone role; app map for the finances skill
-    │   └── obsidian.md           role: notes — OPTIONAL; absent means no API, not no notes
-    │
-    ├── .claude/                everything Claude Code reads                    generic
-    │   ├── settings.json         model pin + hooks; symlinked from the vault root
-    │   ├── hooks/                deny and ask gates, write trace, session-start, prompt and Stop hooks (see .claude/README.md)
-    │   ├── .gitignore            a whitelist — other programs write here too
-    │   ├── agents/               subagents; symlinked from the vault root
-    │   │   ├── newsletter-reader.md  reads newsletter threads + its own saved output, nothing else
-    │   │   └── job-mail-reader.md    same shape, for job-alert mails
-    │   └── skills/               capabilities, loaded on demand
-    │       ├── personal-assistant/   the orchestrator — cross-tool workflows
-    │       ├── obsidian/             notes: the always-present substrate
-    │       ├── vault-maintenance/    weekly health report on the vault, and fixes on confirmation
-    │       ├── calendar/  clickup/  mail/    one per tool role
-    │       ├── transcripts/          meeting & memo transcripts: triage, distill, recall
-    │       ├── newsletter-digest/    weekly cross-source digest of newsletters
-    │       ├── job-digest/           job-alert mails scored against the search, plus a market log
-    │       ├── meals/                meal-plan logistics: cooked-tracking, calendar slots, suggestions
-    │       ├── daily-log/            spoken daily check-in → one structured note; watch rules, summaries
-    │       ├── advisors/             entry point to the prompt-note advisors (life coach, therapist, chef, …)
-    │       ├── finances/             read-only finance snapshots, sheet + advisor-brief upkeep
-    │       ├── phone/                drive Android apps through a scrcpy mirror; read-only by default
-    │       ├── setup/                configure and health-check integrations
-    │       ├── retro/                turn a session into lessons, and apply them
-    │       ├── usage/                what this account actually spends
-    │       └── demo/                 present the OS to someone else
-    │
-    ├── tools/                  scripts skills call by path; most read-only     generic
-    │   ├── session-digest.sh     reduce a transcript to what a retro needs
-    │   ├── check-coverage.sh     the enumerations that must match reality
-    │   ├── usage.sh              token usage, read from Claude Code's own logs
-    │   ├── macwhisper-live.sh    a recording's transcript, live, from MacWhisper's database
-    │   ├── phonemirror.sh        check the phone mirror (may `adb connect`); rebuild writes its app bundle
-    │   ├── phonemirror-launcher.sh   the mirror's launcher: picks USB or Wi-Fi, execs scrcpy
-    │   ├── phonemirror-stub.c        the bundle executable; only execs the launcher
-    │   ├── vault-search.py       hybrid search over the notes: local embeddings + keywords, one SQLite file
-    │   ├── vault-health.py       vault maintenance: read-only report on frontmatter, descriptions, links, tags, duplicates
-    │   ├── vault-health-weekly.sh  the unattended weekly run: report + description proposals into tmp/health/
-    │   ├── advisor-stub.py       builds an advisor's paste-ready Claude project stub from its prompt note
-    │   ├── daily-log-stats.py    numbers from the daily-log notes: weekly averages, two-weekly summaries
-    │   ├── garmin-export.py      a Garmin Connect export as a daily CSV, for a health baseline
-    │   ├── frontmatter-set.py    the bulk frontmatter writer: checked, snapshotted, logged
-    │   └── frontmatter-polish/   propose a description and language per note (local or cloud model); review table
-    │
-    ├── tests/                  fixtures for every hook, gate and script        generic
-    │   ├── run.sh                every hook and gate, including malformed input
-    │   └── fixtures/             recorded transcripts the usage fixtures read
-    │
-    ├── history/                append-forever, fully tracked                   personal
-    │   ├── file-log.md           AI changes to vault notes outside _AI/
-    │   ├── session-log.md        continuity between sessions
-    │   ├── lessons.md            the learning ledger — what it has been taught
-    │   └── usage-baseline.md     what this account normally spends, to compare against
-    │
-    ├── docs/                   thinking, not machinery                         personal · never exported
-    │   ├── roadmap.md            living index of intent
-    │   ├── artifacts/            published write-ups, with their sources
-    │   └── working-notes/        one file per in-flight roadmap item
-    │
-    ├── templates/              skeletons for scaffolding and sharing           generic
-    │   └── integrations/         one per tool pack that ships a template
-    ├── setup/                                                                  generic
-    │   ├── install.sh            root glue, scaffolding, and a self-check
-    │   ├── export.sh             clean shareable copy + leak check
-    │   ├── leak-check.sh         the scan itself — refuses to run if it cannot find _AI
-    │   ├── version.sh            reads and bumps VERSION; used only when releasing
-    │   ├── publish.sh            same as export, but preserves public git history
-    │   ├── scheduled-tasks/      one generic file per optional scheduled run; the setup skill installs them
-    │   └── git-hooks/            pre-commit: the fast coverage check; install.sh wires it in
-    │
-    ├── .github/workflows/                                                      personal · one exception
-    │   ├── verify.yml            gates + public diff on every push; publishes nothing
-    │   ├── publish.yml           manual trigger; the only thing that goes public
-    │   └── public-ci.yml         the PUBLIC repo's CI; ships as ci.yml
-    │
-    ├── tmp/                    snapshots, scratch, hook traces                 gitignored
-    └── databases/              the search index; rebuildable, never committed  gitignored
+Put the repo inside your vault, **named `_AI`**: the root stub imports `@_AI/CLAUDE.md` and the
+symlinks point into `../_AI/`, so the name is load-bearing, and `install.sh` refuses to run
+anywhere else.
+
+```bash
+cd "/path/to/your/obsidian/vault"
+git clone https://github.com/yannikbauer/obsidian-ai-os.git _AI   # the name _AI is required
+bash _AI/setup/install.sh   # root stub, .claudeignore, symlinks, git init + pre-commit check
+claude                      # start a session, then say "set up my tools"
 ```
 
-### What `install.sh` creates
+`install.sh` scaffolds your private files from `templates/` without overwriting anything and
+checks its own work (it ends with `all checks passed`). Fill in `me.md` and
+`maps/vault-map.md`, then ask the session to set up your tools: the **`setup`** skill probes
+your connectors and writes your `integrations/` files from live API data. Skills are invoked
+by asking in plain words, or as `/setup`.
 
-Most of the tree above is **not** in the repo, because it is either personal or
-machine-local. A fresh clone holds only the generic parts; `install.sh` scaffolds the
-rest from `templates/` and never overwrites anything that already exists, so it is
-safe to re-run:
+## Before you install
 
-| Created in `_AI/` | From | Why it is not committed |
-|---|---|---|
-| `me.md`, `maps/vault-map.md` | templates | yours to fill in |
-| `maps/workflow-map.md` | template | which system is authoritative for what — a decision to make once, not a build. Ships pre-filled with a sane default; edit the rows that do not match how you work |
-| `maps/advisors-map.md` | template | your advisors, their prompt notes and phone docs; empty until you add one (see [Advisors](#advisors-claude-projects-as-front-ends-to-the-vault)) |
-| `history/file-log.md`, `history/session-log.md` | templates | your record, not the framework's |
-| `history/lessons.md` | template | the learning ledger — what the OS has been taught. **Yours starts empty.** Comments across this repo cite lessons as `L001`, `L006` and so on: those are entries from the author's ledger, kept as the *reason* a rule or a test exists. They are provenance, not a cross-reference you can follow — read the sentence around them, not the id. |
-| `docs/README.md` | template | creates the folder and says what it is for |
-| `tmp/README.md` | template | `tmp/` is gitignored, so the folder needs creating |
-| `config/leak-patterns.local`, `config/leak-allow.local` | templates | your identifiers |
-| `config/readonly-zones.local` | template | your folder names |
-| `config/publish.local` | template | your destination; ships commented out |
-| `config/correction-words.local` | template | what counts as you correcting the AI; all comments by default, so the built-in English list stays in force |
-| `config/clickup-replace-allow.local` | template | task-system page ids the AI may rewrite in full; empty by default, so every whole-page rewrite is denied |
-| `config/sensitivity.local` | template | folders whose notes are private or secret; all comments by default, so only frontmatter labels count |
-| `config/search-index.local` | template | which folders the search index skips or flags as third-party; all comments by default, so the built-in defaults apply |
-| `config/vault-health.local` | template | which folders the health check skips, which notes need no description; all comments by default |
-| `integrations/` | — | **empty on purpose**: a file's existence is the on-switch, so a placeholder here would read as a half-configured tool. The `setup` skill writes the real files. |
-
-`databases/` is not created either: the first `tools/vault-search.py index` makes it (see
-[Vault search](#vault-search)). Deleting it costs a rebuild, nothing else.
-
-The same run also writes the **vault-root** entries marked *created by install.sh* in the tree above. They are
-the glue described under [Why the files sit where they do](#why-the-files-sit-where-they-do),
-and both symlinks point *into* this repo, so nothing of substance lives outside it.
+- **Cost.** Claude Code needs a paid Claude plan or an API key. The scheduled tasks and long
+  sessions use tokens like any session; the `usage` skill shows what you actually spend.
+- **Your notes.** Installing touches none of them: it writes a stub `CLAUDE.md`, an
+  `AGENTS.md`, a `.claudeignore` and three symlinks at the vault root, and skips any that
+  already exist. Notes change only when a session asks and you agree; a `description` is
+  added to a note only when the OS writes that note, or when you run the backfill.
+  Uninstall by deleting `_AI/` and those root entries.
+- **Your data.** Whatever a session reads is sent to Anthropic, as with any Claude Code
+  session. Search embeddings are computed locally; notes labelled private ask before a
+  session opens them, and bulk jobs send them to a local model only
+  ([Notes](guide/notes.md#note-metadata-descriptions-and-sensitivity)).
+- **Platform.** Built and used on macOS. The hooks and tests also run on Linux (CI runs
+  there); the phone mirror and keep-awake setup are Mac-only. Windows is untested.
 
 ## What it can't do yet
 
 Stated up front, because the honest version is more useful than a feature list — and
 because these are design decisions, not a backlog of oversights.
 
-- **Little runs on a schedule, and all of it is optional.** The scheduled tasks are
-  version-controlled in `setup/scheduled-tasks/`, one generic file each, and the `setup`
-  skill installs them and checks them against the app. They are: the weekly, read-only vault
-  health report ([Vault maintenance](#vault-maintenance)), which writes only to `tmp/`; the
-  weekday newsletter and job-alert digests, which keep one note per week each and, only under
-  a standing permission recorded in the mail integration file, archive the mail they digested
-  (inbox removal only, keeping what needs a look, with the reason in the note); the
-  two-weekly Life Coach summary, which writes proposals only; and two sessions
-  that open and wait for you (the morning daily-log check-in and the quarterly review).
+- **Little runs on a schedule, and all of it is optional.** A few scheduled tasks (digests,
+  the health report, a morning check-in that waits for you) live in `setup/scheduled-tasks/`.
   Everything else starts because a human opened a session: no daemon, no background agent
-  watching your calendar.
-- **Writes to a task system are deliberately constrained.** A test showed that
-  rewriting a whole page silently destroys rich content — task and doc references
-  flatten to plain links on read, so writing the page back replaces every one of them.
-  The OS appends, and proposes the rest as text for you to apply. That is less
-  automation than was built, kept off on purpose.
-- **Search is optional, and the first build is slow.** The `setup` skill offers it and
-  builds it in the background, but embedding a vault of about 1,100 notes locally takes
-  30–90 minutes on a laptop. Without it, the OS falls back to grep.
-- **Learning is human-gated, and new.** A retro pass reads a session's own transcript
-  rather than its summary of itself, and routes what it finds: a fact about a tool into
-  that tool's integration file, a workflow step into a skill, a mechanisable rule into a
-  hook *with a test*. Only a **disposition that has recurred** earns an always-on rule,
-  because everything in the framework file is loaded every session. Every change is a
-  diff the human approves. It does work: over its first two months the ledger gathered
-  around forty lessons, most of them now living in the skill, hook or integration file they
-  were about, and one caught its own author an hour after being promoted. But every lesson
-  so far came from one user's sessions, most of them sessions that were also building the OS.
+  watching your calendar. ([Always on](guide/always-on.md))
+- **Writes to a task system are deliberately constrained.** In ClickUp, rewriting a whole
+  doc page silently turns its embedded task and doc references into plain links, so the OS appends, and proposes the rest as text
+  for you to apply. Less automation than was built, kept off on purpose.
+- **Search is optional, and the first build is slow.** The `setup` skill offers it, but
+  embedding about 1,100 notes locally takes 30–90 minutes on a laptop. Without it, grep.
+- **Learning is human-gated.** Lessons become changes to files only through a diff you
+  approve, and so far they all come from one user's sessions.
+- **macOS-first.** The phone mirror, the keep-awake setup and some tools assume a Mac.
 - **n=1.** One user, a few months of history. Everything above is one person's
   experience, not a validated design.
 
@@ -285,735 +140,52 @@ because these are design decisions, not a backlog of oversights.
 Direction rather than plan — no dates, no ordering, and the detailed roadmap stays
 private because its reasoning is entangled with one person's circumstances.
 
-- **The repair layer of vault maintenance.** The weekly health report
-  ([Vault maintenance](#vault-maintenance)) detects; repair is still mostly by hand. Next:
-  link-fix and orphan proposals drawn from the search index, and descriptions applied
-  without review for unlabelled notes once enough weekly sheets came back clean.
+- **The repair layer of vault maintenance.** The weekly report detects; repair is still
+  mostly by hand. Next: link-fix and orphan proposals drawn from the search index.
   <!-- roadmap: 46 -->
-- **Closing the gaps in the sensitivity boundary.** Labels exist and the Read gate asks
-  before opening a labelled note. Grep and shell reads still go around it, because a
-  shell command's target is a string no hook can read reliably. <!-- roadmap: 8 -->
+- **Closing the gaps in the sensitivity boundary.** Grep and shell reads still go around
+  the Read gate, because a shell command's target is a string no hook can read reliably.
+  <!-- roadmap: 8 -->
 - **Guardrails that do not depend on the harness.** The gates are Claude Code hooks, so
-  another runtime opening the vault meets none of them. Moving the policy into a vault
-  gateway (an MCP server every runtime has to go through) makes it the boundary rather
-  than a convention. <!-- roadmap: 48 -->
-- **A way to test behaviour that lives in prose.** The learning loop stays human-gated
-  precisely because nothing can yet catch a behavioural regression automatically: a
-  capable agent's failure mode is not an error, it is a plausible artifact. Rules that
-  can be mechanised keep moving into hooks, which have tests and cannot be argued out of
-  their answer; what is left is judgment, and the human gate is the design rather than
-  caution about it. <!-- roadmap: 35 -->
-
-Each bullet carries a hidden `roadmap:` tag naming the private roadmap item behind it, and
-`check-coverage.sh` fails once that item is marked done, so this list cannot go on
-promising something that already shipped.
-
-## Prerequisites
-
-- **Claude Code** installed (`npm i -g @anthropic-ai/claude-code`, or via the desktop app). Verify with `claude --version`.
-- **git** installed (`git --version`).
-- **`jq`** at `/usr/bin/jq` — the hooks parse their input with it. Shipped with recent macOS; `install.sh` checks and fails loudly if it is missing, because the hooks fail *open* and a missing `jq` would silently stop the safety gates enforcing.
-- An **Obsidian vault** that is not itself a git repo — `_AI/` becomes its own repo inside it, and the vault stays plain-local.
-- *Optional, for [vault search](#vault-search):* **`uv`** and **Ollama** with the `bge-m3` model.
-- A **Claude account** you are signed in to (`claude auth status`), if you want account connectors for mail/calendar/tasks — see [Connectors](#connectors).
-
-### Obsidian plugins — none required, several assumed
-
-**The OS itself needs no plugin.** It reads and writes markdown files, which is why disk
-access stays the default route for note content: faster than any API, no token, and it works
-while Obsidian is closed.
-
-What the plugins buy is the *conventions* the bundled workflows assume. Each degrades in a
-specific, named way, so pick the ones whose loss you would actually notice.
-
-| Plugin | What it unlocks here | Without it |
-|---|---|---|
-| **Templater** | Periodic and yearly notes whose dates, navigation links and tags are *computed*, not typed. | The OS would have to re-implement each template in prose, which drifts from the template silently. Its `<%* … %>` blocks are also a read-only zone the OS never edits. |
-| **Periodic Notes** | One command creates the correctly named, correctly foldered, template-rendered daily / weekly / monthly note. | The OS hand-builds an imitation — and is instructed to *say* it is an imitation rather than pass it off as the template's output. |
-| **Tasks** | The task vocabulary the weekly loop reads and writes: statuses, priorities, start and completion dates, and the live query blocks that make a goals note self-updating. | Tasks stay plain checkboxes. The loop still runs, more crudely; goals notes stop answering questions on their own. |
-| **Local REST API** *(optional)* | The four things the filesystem structurally cannot do — run a template, execute an app command, `PATCH` one section without rewriting a file, and ask the app what it knows (search, tags, metadata). | Disk-only. Nothing is lost except those four. |
-| **Advanced URI** *(optional)* | Fire-and-forget command triggering with no token and no open port. | Nothing, if the REST API is installed — that does the same and returns results. |
-
-**Both API plugins need Obsidian to be running**, so nothing scheduled, pushed or headless may
-depend on them. And the REST API is an authenticated localhost listener with full vault
-read/write *and* command execution, whose key sits in plaintext in its own config — see the
-security notes in `templates/integrations/obsidian.template.md` before enabling it.
-
-Mentioned in passing but **not** required: Dataview, Calendar, and an unlinked-files finder.
-
-
-## Quick start
-
-**Step 0 — put the repo inside your vault, named `_AI`.** This is not optional:
-the vault-root stub imports `@_AI/CLAUDE.md` and the skills symlink points at
-`../_AI/.claude/skills`, so the directory name is load-bearing. `install.sh` refuses to
-run from anywhere else rather than leaving you with broken links.
-
-```bash
-cd "/path/to/your/obsidian/vault"
-git clone https://github.com/yannikbauer/obsidian-ai-os.git _AI   # the name _AI is required
-```
-
-Then:
-
-```bash
-# from the vault root
-bash _AI/setup/install.sh          # root stub, .claudeignore, symlinks, git init + pre-commit check
-# fill in me.md / maps if freshly scaffolded
-claude                             # start a session, then run the setup skill
-```
-
-`install.sh` verifies its own output and exits non-zero if the symlink or any of
-the root stub's imports fail to resolve. If it prints `all checks passed`, the
-install is sound; if it exits `1` it refused to install in the wrong place, and
-`3` means the tree is incomplete.
-
-### Connectors
-
-Claude Code reaches external tools over MCP, and there are **two independent
-registries**. Knowing which one you are in saves a lot of confusion:
-
-| | Account connectors | Self-registered servers |
-|---|---|---|
-| Added at | `claude.ai/customize/connectors` | `claude mcp add` |
-| Stored | server-side, on your Claude account | `~/.claude.json` or `.mcp.json` |
-| Follows you across machines | yes | no |
-| Shown by `claude mcp list` | **no — never** | yes |
-| Shown by `/mcp` | yes | yes |
-
-**`/mcp` inside a session is the authoritative inventory.** `claude mcp list`
-only ever shows the second column, so an empty-looking list is *not* evidence
-that a connector is missing. Neither is a single `claude auth status` reporting
-`loggedIn: false` — token expiry is transient and any client sharing the
-keychain credential can refresh it.
-
-Most people will use **account connectors** for mail, calendar and a task
-system: add them once at claude.ai, authorize in the browser, and they work in
-the terminal, the desktop app and the IDE extension alike. Nothing about them
-lives in this repo, which is why the OS records *which tool fills which role* in
-`integrations/` and stays silent about how the connection was registered.
-
-If you do register your own servers, pick the scope deliberately:
-
-| Scope | Stored in | Visible where | Shared via git |
-|---|---|---|---|
-| `local` *(default)* | `~/.claude.json`, under the project path | that one directory | no |
-| `project` | `.mcp.json` at the project root | that one directory | yes |
-| `user` | `~/.claude.json`, top level | **all your projects** | no |
-
-**Prefer `--scope user`.** Note that `--scope project` writes `.mcp.json` to the
-directory you launch `claude` from — the **vault root**, which is deliberately
-not a git repo (only `_AI/` is). So the one scope meant for sharing lands
-outside version control and outside `export.sh`.
-
-Once your connectors are in place, run the **`setup`** skill from a session — it
-probes which are actually reachable, shows the available tool packs, and writes
-your `integrations/` files from live API data.
-
-> **Caveat worth knowing:** account connectors are the *lowest* precedence
-> (local → project → user → plugins → claude.ai), and they can be switched off
-> wholesale with `ENABLE_CLAUDEAI_MCP_SERVERS=false` or
-> `"disableClaudeAiConnectors": true` in settings. If every role suddenly reports
-> unconfigured, check that before debugging anything else.
+  another runtime opening the vault meets none of them. A vault gateway (an MCP server every
+  runtime has to go through) would make the policy the boundary. <!-- roadmap: 48 -->
+- **A way to test behaviour that lives in prose.** A capable agent's failure is not an
+  error but a plausible artifact, so the learning loop stays human-gated; rules that can be
+  mechanised keep moving into hooks, which have tests. <!-- roadmap: 35 -->
 
 ## Design principles
 
 - **Generic vs. personal separation** at every layer — the seam that makes sharing safe.
 - **Token efficiency** — thin always-on core; skills lazy-load; personal specifics load only when a skill needs them.
-- **Version control + audit** — `_AI/` is a git repo; every AI file change is logged.
+- **Version control + audit** — `_AI/` is a git repo; every AI change to a vault note is logged.
 - **Safety first** — email treated as untrusted; snapshot-before-destructive-edit; draft-never-send.
+- **Overview here, detail in guides** — this page stays short enough to read once.
 
-## Choosing your tools
+## Guides
 
-The OS assumes nothing about which tools you use. Start a session and run the **`setup`** skill: it probes which connectors are actually reachable, shows you the available tool packs, and writes your `integrations/` files by querying each API — so your IDs are right by construction rather than hand-copied.
-
-A tool is configured if and only if `_AI/integrations/<tool>.md` exists. Delete the file and the tool is gone; the skills notice and say so.
-
-## Adding a tool pack
-
-Packs come in two shapes, and picking the right one matters:
-
-- **Role-named packs** (`.claude/skills/calendar/`, `.claude/skills/mail/`) hold provider-agnostic logic for a role — they must work for *any* provider (Fastmail, Proton, Apple Calendar, Outlook, …) and must name no specific product, timezone, or language.
-- **Tool-named packs** (`.claude/skills/clickup/`) hold logic genuinely specific to one product's model — naming that product inside its own pack is correct.
-
-**A new provider for a role you already have (e.g. you already use `calendar` but switch from Google Calendar to Fastmail) usually needs only a new `integrations/<tool>.md` file, not a new skill** — the existing role-named pack already handles it generically. Only write a new `.claude/skills/<tool>/` pack when the tool's operating model doesn't fit an existing role, or the role itself has no pack yet.
-
-When you do need a new pack, it is three files:
-
-| File | Contents | Ships? |
-|------|----------|--------|
-| `.claude/skills/<tool>/SKILL.md` | generic "how to operate this tool" logic | yes |
-| `templates/integrations/<tool>.template.md` | menu entry, placeholders only | yes |
-| `integrations/<tool>.md` | your IDs and conventions | never |
-
-Use the `skill-creator` or `superpowers:writing-skills` skill to write the SKILL.md. Keep every real ID out of the first two files — `setup/export.sh` runs a leak check that will refuse to publish otherwise.
-
-## Interfaces
-
-The same files and config are read by all of them, so the OS behaves consistently whether you use:
-
-- **Claude Code in the terminal** — most control; best for building and debugging skills.
-- **Claude Code in the desktop app** — same engine, GUI.
-- **Claude Code in an IDE extension** — nice for editing skills and running the assistant side by side.
-
-Pick per task; there is nothing to reconfigure between them — **provided your
-tools are account connectors**, which follow your account onto every surface.
-A server registered with the default `local` scope is bound to the one directory
-it was added in and will not follow you; use `--scope user` if you want it
-everywhere.
-
-## Note metadata: descriptions and sensitivity
-
-Two frontmatter fields carry most of the routing. Both are conventions in
-`maps/vault-map.md`, so the `obsidian` skill applies them whenever it creates or edits a note.
-
-**`description`**: one plain-English sentence of 15–30 words, even for a note in another
-language, saying what the note is *for* and what it holds. An agent or the search index
-can decide whether to open a note from this line alone, which is the token saving. It is
-not a summary. Notes whose filenames already route them (weekly notes, transcripts) go
-without one. A sensitive note gets a neutral description that names its kind and never its
-content: *"Private log on health."*
-
-**`sensitivity`**: `private` or `secret`; no field means normal. **It labels; it doesn't
-hide.** Hiding private notes would also make them unsearchable, and they are often exactly
-what you want to find. So a labelled note stays indexed and readable, and:
-
-- `guard-sensitive-read.sh` **asks** before a Read of it; it never denies. Opt a session in
-  with `AIOS_INCLUDE_PRIVATE=1`.
-- bulk jobs send it to a **local** model only, enforced in the script (see below).
-- the search index returns it as a pointer (path, title, description), not text. Credential
-  and ID-number lines are redacted in **every** note before indexing; `secret` (credentials,
-  account numbers) also loses long tokens, and stays a pointer even for an opted-in session.
-
-Whole folders get a label in `config/sensitivity.local` (`Periodic notes/* = private`) instead
-of note by note; the stricter of folder and frontmatter label wins. **Known gap:** Grep and
-shell reads bypass the gate.
-
-### Backfilling existing notes
-
-Three scripts, run from `_AI/`, with paths relative to the vault. Proposing never writes a
-note, and applying never runs without a dry run first.
-
-```bash
-# 1. notes without a description
-mkdir -p tmp/polish && (cd .. && grep -L '^description:' _NOTES/*.md) > tmp/polish/todo.txt
-# 2. propose: Haiku for normal notes; labelled notes switch to the local model by themselves
-python3 tools/frontmatter-polish/propose.py --backend claude --model haiku \
-  --out tmp/polish/run.jsonl < tmp/polish/todo.txt
-# 3. review side by side (several runs become columns)
-python3 tools/frontmatter-polish/review.py tmp/polish/run.jsonl > tmp/polish/review.md
-# 4. apply only these keys: dry run, then for real
-python3 tools/frontmatter-set.py --from-jsonl tmp/polish/run.jsonl \
-  --keys description,language --reason "frontmatter polish" --dry-run
-```
-
-- **`propose.py`** has two backends: `ollama` (default, needs a local model such as
-  `qwen3.5:9b`) and `claude` (the `claude` CLI in print mode, on your subscription login).
-  A note labelled private or secret always goes to the local model (`POLISH_LOCAL_MODEL`),
-  and it gets a template description built from fixed word lists. In the pilot, a
-  free-text prompt leaked diary content even though the prompt forbade it. Output is
-  resumable JSONL; descriptions that break the length or one-sentence rule are retried
-  twice, then flagged. Filename prefixes listed in `vault-map.md` (`XY_` = an employer)
-  go into the prompt, because a model will otherwise guess.
-- **`frontmatter-set.py`** is the only writer. It quotes YAML-unsafe values, refuses
-  read-only zones and Templater frontmatter, checks the body is byte-identical afterwards,
-  snapshots every note to `tmp/`, and logs each change to `history/file-log.md`. Re-running
-  is a no-op. It also sets one key on many notes:
-  `frontmatter-set.py --key sensitivity --value private --reason "…" < paths`.
-
-**Cost and speed, from one real run** (843 notes on an M2 MacBook Air): Haiku took about
-4 s per note, so 742 notes in about 12 minutes on four parallel shards. The local 9B model
-took about 46 s per note for the 101 private ones. Two things to know: a plain `claude -p`
-started inside the vault loads the whole OS, about 45k tokens per call, so the script runs it
-with no tools, settings or MCP from your home directory, at under 1k tokens. And a stale
-`ANTHROPIC_API_KEY` in your environment overrides the subscription login, so the script
-drops it.
-
-**Which notes are done?** The frontmatter is its own index: a note without `description`
-is still to do, which is a grep or an Obsidian Bases filter away. No separate tracking file.
-
-## Vault search
-
-`tools/vault-search.py` answers "which note was about…" by meaning, not by string. A
-question in English finds a German note, and a paraphrase finds a note that never uses
-the words. It is one Python file with three commands:
-
-```bash
-tools/vault-search.py index            # incremental: only notes whose content changed
-tools/vault-search.py search "train discount card" [-k 8] [--json]
-tools/vault-search.py status           # notes, chunks, model, last update
-```
-
-**How it works.** Notes up to about 550 tokens become one chunk. Longer ones are split at
-their H1–H3 headings, then at paragraphs, to about 450 tokens with a small overlap. Every
-chunk is prefixed with `title — description · tags › heading path`, so a fragment like
-"decided against it" still carries its context. A local model (`bge-m3` via Ollama,
-multilingual, 1024 dimensions) embeds the chunks. Vectors (`sqlite-vec`, exact cosine) and
-a keyword index (SQLite FTS5, BM25) live in one file. A query runs both, fuses the rankings
-with weighted Reciprocal Rank Fusion, and returns notes, each with its best section.
-Vectors catch meaning, and keywords catch names and IDs that vectors blur.
-
-**Did it earn its place?** It was built only after an eval against the grep baseline: 24
-known-item questions, with each target note picked *before* its question was written.
-The right note landed in the top five for 18 questions, against 14 for grep plus filename
-matching. The gain is in paraphrase, cross-language and flooded queries ("money I lent"
-matches 176 files). Note that the set is small, one person wrote both the questions and
-the grep terms, and grep got a single try where an agent would retry.
-
-**Privacy.** Embedding is local by default, so no note leaves the machine. Sensitivity
-labels travel with every chunk: private and secret hits come back as pointers, and text
-that looks like credentials or ID numbers is redacted before storage and again on output.
-Third-party folders (`external` in the config) are flagged so their snippets are read as
-data, never instructions.
-
-**How the OS uses it.** One rule in `CLAUDE.md` and a section in the `obsidian` skill send
-meaning-questions to the search first. Grep stays the tool for exact strings. A hook adds
-a one-line reminder the first time a session greps the notes, and a session-start hook
-refreshes the index in the background, which usually takes seconds.
-
-**Setting it up.** Needs [`uv`](https://docs.astral.sh/uv/) (it runs the script and
-fetches `sqlite-vec`; a Python built without SQLite extension support cannot load it) and
-[Ollama](https://ollama.com):
-
-```bash
-ollama pull bge-m3
-tools/vault-search.py index            # first build: 30–90 min in the background on a laptop
-tools/vault-search.py search "something you wrote about once"
-```
-
-Folders to skip, folders to flag as external, and the model live in
-`config/search-index.local` (`install.sh` creates it, all comments; defaults skip `_AI/`,
-archives, attachments and templates, and flag nothing as external). With `embedder = none` the index is keywords only: no model needed, but no
-paraphrase either. Run the script directly, never as `python3 vault-search.py`.
-
-## Vault maintenance
-
-A notes vault drifts. Links break when notes are renamed, copies pile up, tags split into
-spellings, and a note's one-line description stops matching what the note became. Vault
-maintenance keeps that in check in three layers, and only the last one needs you.
-
-| Layer | What it does | When |
-|---|---|---|
-| **Prevent** | The `obsidian` skill gives every note it writes a `description`, a sensitivity label where one applies, and quoted YAML values | on every write, automatically |
-| **Detect** | A read-only report of what has drifted | every Monday, unattended |
-| **Repair** | Fixes, proposed first and applied on your word | when you say so |
-
-It is the `vault-maintenance` skill. Ask for it as "vault maintenance", "maintenance",
-"health check" or "check the vault".
-
-### What the report checks
-
-Seven checks, and no model is involved in any of them:
-
-- frontmatter that doesn't parse as YAML
-- notes missing a `description`
-- stale descriptions: the description hasn't changed, but the body has moved a lot
-- broken wikilinks
-- orphan notes, which nothing links to
-- tags that differ only in case or separator
-- likely duplicates, found two ways: Obsidian's "Note 1" copies, and note vectors from the
-  search index that sit above a cosine threshold
-
-Each section of the report names its fixer. The report carries paths and link targets only,
-never note text, so it is safe to show for private notes. Links to date notes that were never
-created (weekly navigation) are counted, not listed.
-
-### How it runs, week to week
-
-1. **Monday 07:30, without you.** A scheduled task runs `tools/vault-health-weekly.sh`. It
-   writes the report to `tmp/health/YYYY-MM-DD.md` and proposes descriptions for notes still
-   missing one. Normal notes go to Haiku. Notes labelled private or secret go to the local
-   model, enforced in `propose.py`. It never writes a note. It needs the machine awake and the
-   app running; if they aren't, the task runs the next time the app opens.
-2. **In the Monday review.** "Plan my week" runs the report fresh, shows you one line ("nothing
-   new", or the counts), and marks those findings as seen (`ack`). If descriptions were
-   proposed, it offers the review sheet; on "apply", `frontmatter-set.py --from-jsonl` writes
-   them, with a snapshot and a log line per note.
-3. **Anything else is your call, one at a time:** a broken link, a duplicate to merge, a tag
-   spelling.
-
-**You don't need to remember any of this, only to do the Monday review.** A finding stays
-"new" until a report has actually been shown to you. Only `ack` moves that line, and the
-unattended run never acks, so skipped weeks pile up instead of disappearing.
-
-### Recommended rhythm
-
-- **Weekly:** a one-minute glance in the Monday review, and "apply" if descriptions are waiting.
-- **Monthly, optional, about 20 minutes:** `report --all`, then clear a handful of broken links
-  or duplicates.
-- **Leave the orphan backlog alone.** Search finds unlinked notes anyway. An orphan is worth a
-  look when it's *new*, because that is a note you just forgot to link.
-
-### Commands
-
-```bash
-tools/vault-health.py report          # what's new since you last looked
-tools/vault-health.py report --all    # every finding
-tools/vault-health.py ack             # mark the current findings as seen (after showing a report)
-tools/vault-health.py missing         # notes without a description, one path per line
-```
-
-**How "new" and "stale" work.** `databases/vault-health.json` holds the findings at the last
-`ack` and, per note, a hash of its description plus the body's word count and headings. A
-description is stale when it hasn't changed but the body has moved: at least 30% more or fewer
-words (minimum 50), or two headings added or removed. The search index can't do this, because
-it hashes the whole file and can't tell a body edit from a frontmatter edit. Links are resolved
-from disk the way Obsidian resolves them, so the check works with Obsidian closed. It takes
-about 15 s on 1,100 notes. Proposals accumulate in `tmp/health/proposals.jsonl`, so a note is
-proposed once, and a proposal that failed (Ollama down) is retried the next week. Settings live
-in `config/vault-health.local`.
-
-## Daily log
-
-The `daily-log` skill is a spoken check-in: you talk for a minute or two about the
-previous day, and it writes one daily note whose frontmatter is the data (mood, energy,
-sleep, movement, people, work and more), asking only for what you left out. The schema is
-not in the skill but in `maps/daily-log-map.md`, so the fields are yours to choose; without
-that map the skill says it is not set up rather than inventing any. Calendar events and,
-if you have a wearable integration, watch data are offered as suggestions, never filled
-into a rating.
-
-`tools/daily-log-stats.py` turns the notes into numbers the same way every time: a weekly
-averages line for the Monday review, and a two-weekly summary that compares days by
-factor, each number with its n. An advisor reads the summary and does the interpreting
-(see below); the script never does. The notes are private by folder label, and the
-optional scheduled check-in only opens a session and waits for you.
-
-## Advisors: Claude projects as front-ends to the vault
-
-A Claude Desktop project is a good home for a long-running advisor (a coach, a therapist
-persona, a chef, a financial advisor) because it is on the phone too. Used on its own, it
-has four problems:
-
-- **Its knowledge files go stale.** You upload a note, edit the note, and the project keeps
-  the old copy.
-- **Its memory is stuck in the cloud.** Nothing outside the project can read it, so the
-  laptop and the other projects never see what it learned.
-- **The phone can't reach the vault.** A linked desktop project can read local files; the
-  same project on the phone can't.
-- **Projects can't see each other.** The career coach doesn't know what the therapist
-  noticed, and nobody connects them.
-
-The fix is to make the **vault the master** and the project a thin front-end for the phone.
-
-| Piece | Where | What it does |
-|---|---|---|
-| **Prompt note** | vault, `_NOTES/Claude <Advisor> prompt.md` | persona, judgment and the advisor's file map. The only place the prompt is edited. |
-| **Working notes** | vault, `<Advisor> _ <Topic>.md` | what the advisor knows and keeps, as few as the domain needs. Replaces project memory as the store. |
-| **Stub + fallback** | project instructions | "If the vault is reachable, read the note; it wins." Below it, a copy of the note body with a version line, so a phone chat can say when its copy is stale. Generated by `tools/advisor-stub.py`, pasted by hand. |
-| **Phone copies** | project docs | copies of the few notes a phone chat needs. The linked session refreshes them. Only the title counts: the project tool names a doc a chat writes `claude/<Title>`, while one you upload keeps its name. |
-| **Phone inbox** | project memory | the only job left for memory: on the phone, what must reach the vault goes there marked `phone, not yet in vault`. The next linked session writes it to the vault after you confirm, and clears it. |
-| **Shared ledger** | vault | one note every advisor reads. Only a hub advisor writes its sections; the others propose one line. This is how projects see each other. |
-| **Router** | `advisors` skill + `maps/advisors-map.md` | runs any advisor from Claude Code on the laptop, with the AIOS rules (confirm writes, file log, sensitivity labels) on top of the prompt's own. |
-
-Every prompt note follows one spine (`templates/advisor-prompt.template.md`): who does what,
-the advisor's own sections, other advisors, the ledger, *Knowledge, files and continuity*
-(file map, project copies, access per surface, vault edits, prompt changes, sync rule), end
-of session. Advisors whose phone chats decide things end them with a *Decisions & new facts*
-block you paste into the AIOS; the others don't need one.
-
-**Adding one:** copy the template to a prompt note, add a block to `maps/advisors-map.md`,
-run `tools/advisor-stub.py "<Advisor>"`, create the project, paste the stub, upload the phone
-copies. **Moving an existing project in** takes one migration chat inside that project
-(only it can read its own docs and memory). It exports everything verbatim to `_AI/tmp/`,
-proposes a target for each item, writes to the vault on your yes, and keeps only the phone
-copies. The `advisors` skill has the prompt.
-
-**What it can't do:** the phone still can't write to the vault, so anything decided there
-waits for the next linked session; copies lag between refreshes; and a prompt change means
-re-pasting the stub. A vault connector reachable from the phone would remove the inbox
-and the copies, and is the obvious next step.
-
-## Phone mirror (optional)
-
-The `phone` role drives an Android phone through **PhoneMirror**: a small macOS app bundle
-(`~/Applications/PhoneMirror.app`, bundle ID `local.phonemirror`) wrapping a copy of
-[scrcpy](https://github.com/Genymobile/scrcpy). It is an app rather than a bare `scrcpy`
-call so that computer use can grant it by bundle ID. Needs `brew install scrcpy
-android-platform-tools` and Xcode's command-line tools (`cc`).
-
-**How it's built.** `Contents/MacOS/PhoneMirror` is a compiled stub
-(`tools/phonemirror-stub.c`) that execs `Contents/Resources/launch.sh`
-(`tools/phonemirror-launcher.sh`), which picks the device and execs the bundled scrcpy.
-The stub exists because launchd refuses a shell script as a bundle executable (spawn
-error 162). Every step is an `exec`, so the window keeps the bundle's identity.
-`tools/phonemirror.sh rebuild` re-copies scrcpy from Homebrew, installs the launcher,
-compiles the stub and re-signs. Run it after `brew upgrade scrcpy` or after editing either
-source. `tools/phonemirror.sh check` verifies adb, signature, versions, launcher drift and
-the running app. The bundle itself, its `Info.plist` with bundle ID and `ADB` path, is
-made once by hand; `rebuild` refreshes it but does not create it.
-
-**Modes.** The launcher prefers Wi-Fi whenever adb has the phone wirelessly, even with
-the cable in, so pulling the cable doesn't kill the mirror.
-
-| Mode | Phone side | Notes |
-|---|---|---|
-| **Wi-Fi** | Developer options → *Wireless debugging* on, same LAN as the Mac | adb finds the phone over mDNS; the port changes on every restart, nothing to read out |
-| **Cable** | USB debugging on, data cable, *Wireless debugging* off | lower latency, charges the phone |
-| **Pair** (once per Mac) | *Pair device with pairing code*, read out the code | the pairing port is advertised over mDNS (`_adb-tls-pairing`); a restart doesn't undo pairing |
-
-The Mac doesn't need to be on Wi-Fi itself; Ethernet on the same network works. Guest
-networks usually block it. **Switch Wireless debugging off when you're done**: while it's
-on, paired machines on the network can open a debug channel to the phone. Android turns it
-off on its own when the phone changes networks.
-
-Per-user specifics (device, display, start checklist, troubleshooting) live in
-`integrations/phone.md`; the skill's rules (read-only by default, no codes, no payments)
-in `.claude/skills/phone/SKILL.md`.
-
-## Working on the OS
-
-- **Edit skills** in `_AI/.claude/skills/` — those are the real files; the `.claude/skills` symlink just exposes them. Commit changes to `_AI/`.
-- **Update your context** by editing `me.md`, `maps/vault-map.md` and `integrations/*.md` as things change. The `setup` skill can re-verify integration files against live APIs.
-- **Add a skill**: create `_AI/.claude/skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description`) plus instructions. It is discovered automatically through the symlink. Keep it under ~500 lines and push reference detail into files it points at.
-- **Add a map**: new orientation docs (people-map, project-map) go in `_AI/maps/`, and if they should always load, get added to the root stub's `@import` list.
-- **Change a hook** in `_AI/.claude/hooks/`, then run `sh tests/run.sh`. Settings edits are picked up live — no restart. Write commands as `"\"${CLAUDE_PROJECT_DIR}/_AI/.claude/hooks/x.sh\""`: braced *and* quoted, because an unquoted path containing a space fails silently.
-- **Share something new with Claude Code** — a project agent, a slash command — by putting it in `_AI/.claude/<thing>/` and adding one `link_into_repo` line to `install.sh`. Without the link it lives only at the vault root, outside git.
-- **Git lives in `_AI/`**, not the vault root. Run every git command from there.
-- **Every commit runs `check-coverage.sh`** through `setup/git-hooks/pre-commit`
-  (`install.sh` sets `core.hooksPath`). It takes about a second and refuses a commit that
-  leaves the README tree, the hook registrations, the export list or the roadmap out of
-  step with what exists. The full suite (`tests/run.sh`, about a minute) runs before every
-  publish and in CI instead, because a slow commit hook gets skipped with `--no-verify`.
-- **The AI logs its own changes to vault files outside `_AI/`** in `history/file-log.md`. Changes inside `_AI/` are covered by git history instead.
-
-## Sharing your copy
-
-Two scripts, for two different jobs. Both run the same leak check; neither ever
-touches your private `_AI/`.
-
-| | `export.sh` | `publish.sh` |
-|---|---|---|
-| Produces | a fresh directory | a commit on the public repo |
-| Git history | **new** (single commit) | **preserved** |
-| Target must | not exist | already exist as a remote |
-| Use for | a one-shot copy, a zip, a first push | every update after the first |
-
-```bash
-bash _AI/setup/export.sh ~/aios-export     # one-shot snapshot
-bash _AI/setup/publish.sh --dry-run        # see what would change publicly
-bash _AI/setup/publish.sh                  # export, diff, confirm, push
-```
-
-Both copy only the generic parts — framework, `.claude/`, tests, templates, setup,
-LICENSE — via an **allowlist**, so a new personal folder is excluded by default
-rather than by remembering to exclude it.
-
-### The leak check
-
-Every export greps the result for personal tokens. Patterns live in
-`_AI/config/leak-patterns.local`, which is never exported; edit it as your identifiers
-change. If anything matches, the run **aborts** rather than publishing.
-
-Some personal tokens legitimately belong in a public repo — the copyright holder's
-name in `LICENSE`, the repo URL in this README. `_AI/config/leak-allow.local` lists those
-exact literals, which are stripped from a matched line before it is judged. The
-exemption is per-literal, not per-pattern or per-file: your bare first name
-appearing *anywhere else* in `LICENSE` still fails the check, verified by a
-negative test. Keep entries as specific as possible — listing a bare first name
-there would silently disable the check everywhere.
-
-(This paragraph is why the allowlist holds `Firstname Lastname` and not
-`Firstname`: prose that names you in an example would otherwise sail through.)
-
-`publish.sh` syncs with `--delete`, so removing a file from the allowlist removes
-it from the public repo too, and it **confirms before pushing** by default: the
-leak check is the only barrier between this repo and a public one, and a push
-cannot be taken back.
-
-
-### Configuring the destination
-
-`publish.sh` ships in the export, so it holds no personal defaults. Put yours in
-`_AI/config/publish.local` (sourced as shell, never exported):
-
-```sh
-AIOS_PUBLIC_REMOTE=https://github.com/<you>/<repo>.git
-AIOS_PUBLIC_GIT_NAME="Your Name"
-AIOS_PUBLIC_GIT_EMAIL=<you>@users.noreply.github.com
-```
-
-The email matters more than it looks. **Commit metadata is not file content**, so
-the leak check cannot see it — a plain `git commit` would stamp the address from
-your `~/.gitconfig` onto every public commit, permanently and unscrubbably. The
-script refuses to run without an explicit one for that reason. A
-`users.noreply.github.com` address still links commits to your GitHub account.
-
-## Automated publishing
-
-Two workflows, split on a single principle: **verifying is automatic, publishing
-is an act you take.**
-
-Content pushed to a public repo is not retractable. The push enters GitHub's
-public events stream, which third parties mirror, and a later force-push does not
-remove the old commit — it stays reachable by SHA. So nothing here publishes on a
-schedule or on a push.
-
-| | `verify.yml` | `publish.yml` |
-|---|---|---|
-| Runs | every push to `main` | manual dispatch only, typing `publish` to confirm |
-| Publishes | **never** | pushes to the public repo's `main` |
-| Needs a secret | **no** — the public repo is readable anonymously | yes, `PUBLIC_REPO_TOKEN` |
-| Produces | the exact public-facing diff, in the run summary and as an artifact | a public commit |
-
-Both run the same gates first:
-
-| Gate | Catches |
+| Guide | Read it when you want to… |
 |---|---|
-| `tests/run.sh` | a broken hook — they fail *open*, so breakage is otherwise silent |
-| `actionlint` | a workflow that is itself broken — the thing that runs every other gate |
-| `export.sh` leak check | identifiers you listed in `config/leak-patterns.local` |
-| **gitleaks** | the generic classes you would not have predicted — API keys, tokens, private keys |
-| `install.sh` into a scratch vault | an export that passes every check and then does not install |
-
-### What the gates cannot catch
-
-The scanners catch *categories*: identifiers you listed, and strings shaped like
-credentials. The realistic leak for a system like this is neither. It is **personal
-content drifting into a file that is nominally generic** — a client's name in a
-skill example, a health detail in a workflow, a former employer's process in
-`CLAUDE.md`. Those are exactly the files you edit most, and no pattern will flag
-them.
-
-Only reading the diff catches that, which is why publishing is manual and the diff
-is rendered before anything leaves the repo.
-
-### The review checklist
-
-Whoever reviews a sync — you, or Claude in a session on your behalf — reads the
-diff against these, in order:
-
-1. **Names of real people** other than the repo owner. Friends, partners,
-   colleagues, clients. Examples are the usual culprit.
-2. **Employer or client specifics** — internal process, tooling, terminology,
-   anything learned under an obligation.
-3. **Personal circumstances** — health, money, relationships, living situation.
-   Skills describing "what to do when the user is low on energy" drift here easily.
-4. **Identifiers** the patterns do not know yet: a new calendar, a new account, a
-   new tool's workspace ID. Anything that matches, add to `config/leak-patterns.local`.
-5. **Paths that expose vault structure** beyond what `templates/` already shows.
-6. **Tone** — text written *to* you rather than *for* a reader. Not a leak, but it
-   reads as unfinished in a public repo.
-7. **Is this README still true?** `publish.sh` lists every commit since the README last
-   changed that touched skills, hooks, tools, setup, templates or `CLAUDE.md`, and will not
-   push until you say the README was read against them. A list of names can be checked by a
-   script (`check-coverage.sh` does); whether a sentence is still true cannot.
-
-Claude can do this reading and report, so a clean sync costs you a yes. It is a
-good first pass at 1–5 and an unreliable judge of what *you* consider private:
-whether naming a former employer's method is acceptable depends on obligations
-that are not in the text. Treat a flag as a question for you, not a verdict, and
-treat "clean" as "nothing mechanical found", not as permission to never look.
-
-### Publishing
-
-The usual path is a session: ask Claude to publish, and it runs the gates, builds
-the export, diffs it against the public repo, reads the diff against the checklist
-above, reports, and pushes on your yes. Review and push stay in one operation, so
-what you approved is what ships.
-
-Without a session, run **Publish to public repo** from the Actions tab and type
-`publish` to confirm. Locally, `bash _AI/setup/publish.sh` does the same with a
-diffstat and a prompt.
-
-### Versioning
-
-Publishing syncs content. **Releasing** gives that content a name someone else can
-refer to — which is the only reason a version exists here. Your own git history
-already answers *what changed* for you; a fork has no access to it, so the public
-repo needs an anchor of its own.
-
-`publish.sh` therefore asks once, at the point you are already reviewing the diff:
-
-```
-Release as? [patch/minor/major/keep]
-```
-
-- **patch** — fixes and wording
-- **minor** — new behaviour a plain `git pull` absorbs
-- **major** — **your install needs manual action**: a renamed `.local` knob, a moved
-  path, scaffolding `install.sh` cannot add on a re-run
-- **keep** — publish without cutting a release
-
-That last distinction is the one carrying real information, and it is the reason
-this is SemVer rather than a date. Everything else about the scheme is convention.
-
-Cutting a release writes `VERSION`, tags the public repo `vX.Y.Z`, and prepends an
-entry to a public `CHANGELOG.md`. The entry is **generated** from your private commit
-subjects since the previous tag — never hand-written, so it cannot drift from what
-actually shipped — and it goes through the same leak check as the commit message,
-because a commit subject is metadata that the export's file scan never sees. A hit
-aborts the release rather than degrading quietly: a changelog is a permanent file,
-not a message.
-
-Two deliberate refusals. `--yes` (how CI publishes) keeps the current version, so a
-machine never decides that a sync was a release. `--branch` carries no release
-either — the branch is a proposal that may never merge, and a tag pointing into an
-abandoned branch is a permanent claim about a version that never shipped. Re-using
-an existing tag is refused outright, because unlike a commit a moved tag rewrites
-what an already-cloned copy resolves to.
-
-`CHANGELOG.md` lives only in the public repo. It accumulates there across releases,
-which is why the sync excludes it from `--delete`.
-
-### One-time setup
-
-1. Create the public repo **with** a README:
-   ```bash
-   gh repo create <repo> --public --add-readme \
-     --description "A personal AI OS for Obsidian, driven by Claude Code"
-   ```
-   `--add-readme` gives it a `main` branch immediately. A repo with no commits
-   has no default branch, which makes the first diff and push fiddlier than it
-   needs to be. The placeholder README is overwritten by the first sync
-   (`rsync --delete`), so nothing is lost.
-
-2. Create a **fine-grained personal access token** at
-   *Settings → Developer settings → Personal access tokens → Fine-grained*:
-   - Resource owner: your account
-   - Repository access: **Only select repositories** → the public repo
-   - Permissions: **Contents: Read and write**. That is the only one needed —
-     `Metadata: Read-only` adds itself automatically and is mandatory.
-
-   Scoping the token to the one public repo means a leaked token cannot reach
-   anything private. Note the token is only used by `publish.yml`; `verify.yml`
-   needs no credential at all, because it only reads a public repo.
-
-3. Add it to the **private** repo as a secret named `PUBLIC_REPO_TOKEN`:
-   ```bash
-   gh secret set PUBLIC_REPO_TOKEN --repo <you>/<private-repo>
-   ```
-   It prompts for the value, so nothing lands in your shell history.
-
-4. Set `PUBLIC_REPO` in the `env:` block of **both** workflows to `<you>/<repo>`.
-
-5. Set a reminder for the token's expiry date. When it lapses, `publish.yml`
-   fails at the push step — nothing publishes wrongly, it just stops — but the
-   failure is easier to act on if you were expecting it.
-
+| [Architecture](guide/architecture.md) | understand the layout, the file tree, and what `install.sh` creates |
+| [Tools, connectors and interfaces](guide/tools.md) | connect mail, calendar and tasks, or check which Obsidian plugins matter |
+| [Notes](guide/notes.md) | set up descriptions, sensitivity labels, search and the weekly health report |
+| [Everyday skills](guide/everyday.md) | use the digests, transcripts, meals, finances, usage and demo skills |
+| [Daily log](guide/daily-log.md) | run the daily check-in and its numbers |
+| [Advisors](guide/advisors.md) | set up advisor personas across computer and phone |
+| [Always on](guide/always-on.md) | reach the vault from your phone |
+| [Phone mirror](guide/phone-mirror.md) | connect an Android phone |
+| [Safety and learning](guide/safety-and-learning.md) | see what is enforced, and how lessons are recorded |
+| [Working on the OS](guide/working-on-the-os.md) | edit skills and hooks, or add a tool pack |
+| [Sharing and publishing](guide/publishing.md) | export, publish, version, and review a public diff |
 
 ## Recommended companions
 
-This OS pairs well with the **superpowers** plugin (brainstorming, writing-plans, systematic-debugging, TDD). Install it as a plugin rather than copying it in — plugin skills are namespaced (`superpowers:brainstorming`), so they never collide with this repo's skills, and you keep getting updates.
+This OS pairs well with the **superpowers** plugin (brainstorming, writing-plans,
+systematic-debugging, TDD). Install it as a plugin rather than copying it in — plugin skills
+are namespaced (`superpowers:brainstorming`), so they never collide with this repo's skills.
 
 ## Licence
 
 **Apache-2.0** — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Use it, fork it, adapt it,
-commercially or not. The framework is the shareable part; your `me.md`, `maps/` and
-`integrations/` are yours and never leave your machine.
-
-Two obligations if you redistribute it, modified or not: keep the `LICENSE` and `NOTICE`
-files, and state in modified files that you changed them. That is all — no copyleft, so
-your own additions stay yours.
-
-Apache rather than MIT for the **patent grant**: contributors licence any patents covering
-their contribution, and the licence terminates for anyone who brings a patent suit over the
-work. MIT is silent on patents entirely. Relevant enough in AI tooling to be worth the
-longer file, at no cost to how freely you can use this.
-
-*(Everything published before 2026-09-07 was MIT, and predates the first tagged release.
-Those copies remain MIT for anyone who has them: a licence change never reaches backwards.
-From the first tag on, the tag says which terms a copy came under.)*
-
-If you fork this, put your own destination in `_AI/config/publish.local` rather than
-editing the script — see [Sharing your copy](#sharing-your-copy).
+commercially or not. Keep the `LICENSE` and `NOTICE` files if you redistribute it, and state
+in modified files that you changed them. Why Apache, and the licence history:
+[Sharing and publishing](guide/publishing.md#licence).

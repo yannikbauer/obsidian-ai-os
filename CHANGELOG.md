@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.8.0 — 2026-11-11
+
+- The README is now a short overview; the detail lives in guide/: architecture, tools and connectors, notes, everyday skills, daily log, advisors, always on, phone mirror, safety and learning, working on the OS, sharing and publishing.
+- New guide content: connecting an Android phone step by step, advisors across computer and phone, keeping a session reachable from the phone (Remote Control and a keep-awake app), and a "Before you install" section on cost, your notes, your data and platforms.
+- check-coverage.sh: a README length budget (page and per section), every guide linked from the README, and every relative link and anchor resolving; the file tree is read from guide/architecture.md.
+- A first-reader subagent reviews the README as a newcomer during the publish review (checklist item 8).
+- leak-check.sh --names scans commit subjects, changelog entries and release notes for the names in your people and advisors maps; publish.sh uses it.
+- session-digest.sh no longer counts a subagent's report as a human correction.
+
 ## v0.7.0 — 2026-11-11
 
 - Drift checks: a pre-commit hook (setup/git-hooks/pre-commit, wired in by install.sh) runs check-coverage.sh on every commit; publish.sh runs the full test suite first and asks whether the README was read against the commits that changed what it describes (--readme-reviewed for non-interactive runs).

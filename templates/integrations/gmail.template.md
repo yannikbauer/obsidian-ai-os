@@ -7,7 +7,7 @@
 Personal specifics for Gmail (account, conventions, safety posture). Generic logic lives in the `mail` skill. Fill in and delete guidance lines. Skip if unused.
 
 ## Access
-- Available via Gmail MCP tools (account connector or self-registered — see README § Connectors; then run the `setup` skill).
+- Available via Gmail MCP tools (account connector or self-registered — see guide/tools.md § Connectors; then run the `setup` skill).
 - Account: <email>
 - Languages: <languages>
 

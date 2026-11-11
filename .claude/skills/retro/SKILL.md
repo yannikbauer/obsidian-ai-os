@@ -113,7 +113,7 @@ Then the judgment half. Two classes of file, and only the first needs looking at
 time:
 
 - **System-level, always consider.** These describe the whole and rot on almost any
-  change: the framework file (`CLAUDE.md`), the README, the roadmap, any explainer or
+  change: the framework file (`CLAUDE.md`), the README and the guides in `guide/`, the roadmap, any explainer or
   brief in `docs/`, the presentation skill, and the three scripts that enumerate the
   tree — `install.sh` (does a new personal file need scaffolding?), `export.sh` (does a
   new folder ship, or is it deliberately left behind?), `publish.sh`. **Do not re-read

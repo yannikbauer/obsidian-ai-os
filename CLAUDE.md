@@ -72,7 +72,7 @@ Skills contain **generic logic** ("how to operate a task-system's tasks and docs
   repo enters the platform's public events stream, third parties mirror it, and a later
   force-push does not remove the commit. So `setup/publish.sh` and the publish workflow run
   only on an explicit instruction to publish, given for that occasion. When a change affects
-  the shareable export, say so, review the diff against the checklist in `README.md`, report
+  the shareable export, say so, review the diff against the checklist in `guide/publishing.md`, report
   what it contains, and wait for an answer.
 - **Don't restructure without permission.** No new folders, no reorganizing, no bulk reformatting unless explicitly asked.
 - **Financial/legal caution.** Don't execute trades, move money, or place orders. Provide information; let the user act.

@@ -167,7 +167,7 @@ command -v rsync >/dev/null || { echo "! rsync not found" >&2; exit 1; }
 if [ -n "$NOTES" ]; then
   [ -s "$NOTES" ] || { echo "! --notes: $NOTES is missing or empty" >&2; exit 64; }
   NOTES="$(cd "$(dirname "$NOTES")" && pwd)/$(basename "$NOTES")"  # the script cds later
-  if ! bash "$SCRIPT_DIR/leak-check.sh" "$NOTES" >/dev/null 2>&1; then
+  if ! bash "$SCRIPT_DIR/leak-check.sh" --names "$NOTES" >/dev/null 2>&1; then
     echo "! --notes: $NOTES carries a personal token. Aborting." >&2
     exit 2
   fi
@@ -178,7 +178,7 @@ fi
 # It already had: tools/ ships (it holds the scripts skills call by path) but was
 # missing here, so a tools-only change reached the public repo with an empty
 # summary. Same class of bug as ledger L008, one layer up.
-EXPORTED_PATHS="CLAUDE.md README.md LICENSE NOTICE CONTRIBUTING.md .gitignore VERSION tools templates setup tests .claude"
+EXPORTED_PATHS="CLAUDE.md README.md guide LICENSE NOTICE CONTRIBUTING.md .gitignore VERSION tools templates setup tests .claude"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -212,7 +212,7 @@ fi
 #    the human's behalf) to say the README was read against it. Roadmap #32.
 #    Known limit: any README edit resets the baseline, so a one-word fix "covers" every
 #    earlier commit. The list is a pointer, not proof.
-README_BASE="$(cd "$AI_DIR" && git log -1 --format=%h -- README.md 2>/dev/null || true)"
+README_BASE="$(cd "$AI_DIR" && git log -1 --format=%h -- README.md guide 2>/dev/null || true)"
 README_DRIFT=""
 if [ -n "$README_BASE" ]; then
   README_DRIFT="$(cd "$AI_DIR" && git log --reverse --format='  %h %s' "${README_BASE}..HEAD" -- \
@@ -379,7 +379,7 @@ if [ -n "$RELEASE" ]; then
   # commit-body path below may degrade to a plain message when one is dirty; this
   # one MUST NOT -- a changelog is a permanent file in the tree, so a hit aborts.
   printf '%s\n' "$ENTRIES" > "$WORK/changelog-entry.txt"
-  if ! bash "$SCRIPT_DIR/leak-check.sh" "$WORK/changelog-entry.txt" >/dev/null 2>&1; then
+  if ! bash "$SCRIPT_DIR/leak-check.sh" --names "$WORK/changelog-entry.txt" >/dev/null 2>&1; then
     echo "! A commit subject in this release carries a personal token, and a changelog" >&2
     echo "! entry is a permanent public FILE rather than a message. Aborting." >&2
     echo "! Reword the private commit, or publish with --version keep." >&2
@@ -450,7 +450,7 @@ if [ -n "$LAST_SRC" ] && (cd "$AI_DIR" && git cat-file -e "${LAST_SRC}^{commit}"
           | sed -E 's/#([0-9]+)/item \1/g')"
   if [ -n "$CAND" ]; then
     printf '%s\n' "$CAND" > "$WORK/msg.txt"
-    if bash "$SCRIPT_DIR/leak-check.sh" "$WORK/msg.txt" >/dev/null 2>&1; then
+    if bash "$SCRIPT_DIR/leak-check.sh" --names "$WORK/msg.txt" >/dev/null 2>&1; then
       N="$(printf '%s\n' "$CAND" | grep -c . || true)"
       if [ "$N" -eq 1 ]; then
         # One change: let it BE the subject, so `git log --oneline` is readable.

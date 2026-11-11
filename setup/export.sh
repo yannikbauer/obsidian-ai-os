@@ -26,7 +26,7 @@ mkdir -p "$TARGET"
 
 # --- copy the SHAREABLE set (everything generic) ----------------------------
 # Included: framework CLAUDE.md, .claude/ (settings, hooks, skills), tests/, tools/,
-#           templates/, setup/, README, CONTRIBUTING, ignore files.
+#           templates/, setup/, README, guide/, CONTRIBUTING, ignore files.
 # Excluded: me.md, maps/, integrations/, history/, tmp/, databases/ (all personal).
 # This is an allowlist — a new personal folder is excluded by default, not by rule.
 cp    "$AI_DIR/CLAUDE.md"      "$TARGET/CLAUDE.md"
@@ -36,6 +36,9 @@ cp    "$AI_DIR/.gitignore"     "$TARGET/.gitignore"
 # history answers "what changed" for you, and answers nothing for them.
 cp    "$AI_DIR/VERSION"        "$TARGET/VERSION"
 [ -f "$AI_DIR/README.md" ] && cp "$AI_DIR/README.md" "$TARGET/README.md"
+# guide/ is the detail behind the README: public documentation, unlike docs/, which is
+# the private thinking about the OS and never ships.
+[ -d "$AI_DIR/guide" ] && cp -R "$AI_DIR/guide" "$TARGET/guide"
 [ -f "$AI_DIR/CONTRIBUTING.md" ] && cp "$AI_DIR/CONTRIBUTING.md" "$TARGET/CONTRIBUTING.md"
 # A public repo without a licence is all-rights-reserved: nobody may legally reuse
 # it. The licence names the copyright holder, which is why the leak check needs

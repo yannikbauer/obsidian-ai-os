@@ -44,11 +44,13 @@ Read lazily, in this order, and only what the chosen length needs:
 
 - **Always available** (session-start imports): `_AI/CLAUDE.md`, `_AI/me.md`,
   `_AI/maps/vault-map.md`.
-- `_AI/README.md` — the architecture, the layered design, the limitations
-  (*What it can't do yet*), the install path and the two-registry model. **This is
-  the primary fact source**, and deliberately so: `tools/check-coverage.sh` holds it
-  to the tree it actually describes, making it the one write-up here that cannot
-  quietly stop being true.
+- `_AI/README.md` — the overview: what each feature does, the limitations (*What it
+  can't do yet*), the install path. **This is the primary fact source**, and
+  deliberately so: `tools/check-coverage.sh` holds it and the guides to the tree they
+  describe, making them the write-ups here that cannot quietly stop being true.
+- `_AI/guide/*.md` — the detail behind each README section (architecture, connectors,
+  notes, everyday skills, daily log, advisors, always on, phone, safety, publishing).
+  Read only the one a beat needs.
 - `_AI/docs/roadmap.md` — the tiers and the item numbers for the roadmap beat, and
   the `Done` entries when someone asks why a thing is built the way it is.
 - `_AI/history/session-log.md` — dated evidence for beat 5, and the only record of

@@ -7,7 +7,7 @@
 Personal specifics for Google Calendar (calendar IDs, conventions). Generic logic lives in the `calendar` skill. Fill in and delete guidance lines. Skip if unused.
 
 ## Access
-- Available via calendar MCP tools (account connector or self-registered — see README § Connectors; then run the `setup` skill).
+- Available via calendar MCP tools (account connector or self-registered — see guide/tools.md § Connectors; then run the `setup` skill).
 - Timezone: <IANA tz> — always use this.
 
 ## My calendars

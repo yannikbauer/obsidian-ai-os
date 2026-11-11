@@ -20,8 +20,16 @@
 
 set -euo pipefail
 
+# --names: also scan for the NAMES of people in your life, read from your own maps. For
+# commit subjects, changelog entries and release notes, the text that goes public as
+# METADATA: private subjects are written for you and name people freely ("people map:
+# <name> corrected"), and on 2026-11-11 two such names reached a public commit message,
+# where a force-push cannot remove them (L042). Not used on the file export: a short first
+# name as a whole word is fine-grained enough for a commit line, too noisy for a whole repo.
+NAMES=0
+if [ "${1:-}" = "--names" ]; then NAMES=1; shift; fi
 TARGET="${1:-}"
-[ -n "$TARGET" ] || { echo "usage: leak-check.sh <file-or-directory>" >&2; exit 64; }
+[ -n "$TARGET" ] || { echo "usage: leak-check.sh [--names] <file-or-directory>" >&2; exit 64; }
 [ -e "$TARGET" ] || { echo "! leak-check: no such path: $TARGET" >&2; exit 64; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -64,6 +72,35 @@ fi
 # Built-in generic patterns (safe against template placeholders like <your email>)
 PATTERNS+=("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")   # any real email
 PATTERNS+=("@group\.calendar\.google\.com")                    # google calendar ids
+
+# Names, case-sensitive and as whole words. Sources, both personal and never exported:
+#   maps/people-map.md   — the bold names on its "- **Name** (alias) — ..." lines, plus
+#                          the aliases in parentheses before the dash
+#   maps/advisors-map.md — persona names written as  persona "Name"
+# A missing map contributes nothing; with neither, --names adds no pattern and says so.
+if [ "$NAMES" -eq 1 ]; then
+  names="$(
+    { [ -f "$AI_DIR/maps/people-map.md" ] && awk '
+        /^- / {
+          line = $0; sub(/ — .*/, "", line)
+          while (match(line, /\*\*[^*]+\*\*/)) {
+            seg = substr(line, RSTART + 2, RLENGTH - 4)
+            if (seg !~ /:/) print seg
+            line = substr(line, RSTART + RLENGTH)
+          }
+          l2 = $0; sub(/ — .*/, "", l2)
+          while (match(l2, /\([^)]*\)/)) { print substr(l2, RSTART + 1, RLENGTH - 2); l2 = substr(l2, RSTART + RLENGTH) }
+        }' "$AI_DIR/maps/people-map.md"
+      [ -f "$AI_DIR/maps/advisors-map.md" ] && grep -o 'persona "[^"]*"' "$AI_DIR/maps/advisors-map.md" | sed 's/persona "//; s/"$//'
+    } 2>/dev/null | tr -c '[:alpha:]\n' '\n' | grep -E '^[A-Z][a-z]{2,}$' | sort -u | paste -sd'|' -
+  )"
+  if [ -n "$names" ]; then
+    NAMES_PAT="(^|[^[:alnum:]])($names)([^[:alnum:]]|$)"
+    PATTERNS+=("$NAMES_PAT")
+  else
+    echo "  (--names: no maps/people-map.md or advisors-map.md names found — names not checked)" >&2
+  fi
+fi
 
 # --- deliberate attribution --------------------------------------------------
 # Some personal tokens BELONG in a public repo: the copyright holder's name in
@@ -132,7 +169,12 @@ fi
 for p in "${PATTERNS[@]}"; do
   hits="$(scan "$p" | strip_allowed | grep -E -- "$p" || true)"
   if [ -n "$hits" ]; then
-    echo "  LEAK: pattern '$p' matched:" >&2
+    # The names pattern is a list of the people in your life: name the source, not the list.
+    if [ "$p" = "${NAMES_PAT:-}" ]; then
+      echo "  LEAK: a name from maps/people-map.md or maps/advisors-map.md matched:" >&2
+    else
+      echo "  LEAK: pattern '$p' matched:" >&2
+    fi
     printf '%s\n' "$hits" >&2
     LEAKED=1
   fi

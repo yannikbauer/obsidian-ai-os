@@ -91,7 +91,7 @@ The new integration file's `**Role:**` **must** be one of the fixed role values:
 
 ## Search index (optional)
 
-`tools/vault-search.py` gives the OS search by meaning over the notes (README → *Vault search*). Offer it on first run and whenever the user asks about search. Present it as optional: without an index the OS greps, and nothing else depends on it.
+`tools/vault-search.py` gives the OS search by meaning over the notes (`guide/notes.md` → *Vault search*). Offer it on first run and whenever the user asks about search. Present it as optional: without an index the OS greps, and nothing else depends on it.
 
 1. **Check the prerequisites; don't assume them.** `command -v uv` and `command -v ollama`, then `curl -s localhost:11434/api/tags` to see whether Ollama is running and whether `bge-m3` is pulled. Report what is missing, with the install link from the README. Without Ollama, offer keyword-only (`embedder = none`): it works, but has no paraphrase or cross-language matching.
 2. **Agree the config before building.** Show `config/search-index.local` (from `templates/search-index.template.local`) and propose values from the vault map: folders to skip beyond the defaults, and third-party folders to flag as `external`. Confirm sensitivity rules in `config/sensitivity.local` *first*, because the first build stores what they decide. Write the file only after a yes.

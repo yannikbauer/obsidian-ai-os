@@ -7,7 +7,7 @@
 Personal specifics for ClickUp (IDs, structure, workflow). Generic operating logic lives in the `clickup` skill. Fill in and delete guidance lines. Skip this file entirely if you don't use ClickUp.
 
 ## Access
-- Available via `clickup_*` MCP tools (account connector or self-registered — see README § Connectors; then run the `setup` skill).
+- Available via `clickup_*` MCP tools (account connector or self-registered — see guide/tools.md § Connectors; then run the `setup` skill).
 - Workspace ID: <id>
 - You: <name> (user id <id>, <email>)
 

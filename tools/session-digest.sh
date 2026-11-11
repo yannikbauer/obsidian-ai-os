@@ -91,6 +91,9 @@ SID="${SESSION:-$(basename "$TRANSCRIPT" .jsonl)}"
 #   real prompt    -> has .promptSource ("typed" | "sdk")
 #   tool result    -> has .toolUseResult
 #   injected skill -> .isMeta true / has .sourceToolUseID
+#   peer message   -> .promptSource "system" (a subagent's hand-back, another session's
+#                     message). Truthy, so `select(.promptSource)` let it through, and a
+#                     subagent's review report counted as a human correction (L041).
 # The fallback clause keeps older transcripts that predate .promptSource working, and
 # leans toward including: a missed correction costs a lesson, a false one costs a line.
 #
@@ -99,8 +102,8 @@ SID="${SESSION:-$(basename "$TRANSCRIPT" .jsonl)}"
 user_turns() {
   /usr/bin/jq -r '
     select(.type=="user")
-    | select(.promptSource
-             or ((has("toolUseResult")|not) and (.isMeta|not) and (has("sourceToolUseID")|not)))
+    | select(.promptSource == "typed" or .promptSource == "sdk"
+             or ((has("promptSource")|not) and (has("toolUseResult")|not) and (.isMeta|not) and (has("sourceToolUseID")|not)))
     | (if (.message.content|type)=="string" then .message.content
        else ([.message.content[]? | select(.type=="text") | .text] | join(" ")) end)
     | select(. != null and . != "")

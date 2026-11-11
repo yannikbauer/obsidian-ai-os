@@ -67,10 +67,14 @@ done
 #     Scope matters here: grepping the WHOLE README passes on any passing mention in
 #     prose, so removing a skill from the tree left the check green. It reads the first
 #     fenced block — the tree — and nothing else.
-if [ -f README.md ]; then
-  tree=$(awk '/^```/{n++; next} n==1' README.md)
+# The tree lives in guide/architecture.md since the README became an overview
+# (2026-11-11); a copy without guides falls back to the README's first fenced block.
+TREE_FILE=README.md
+[ -f guide/architecture.md ] && TREE_FILE=guide/architecture.md
+if [ -f "$TREE_FILE" ]; then
+  tree=$(awk '/^```/{n++; next} n==1' "$TREE_FILE")
   if [ -z "$tree" ]; then
-    say "README has no fenced tree block to check the skills and tools against"
+    say "$TREE_FILE has no fenced tree block to check the skills and tools against"
   else
     for d in .claude/skills/*/; do
       # A symlinked skill is a plugin's, not the OS's (Obsidian Copilot links its own
@@ -242,7 +246,7 @@ fi
 #    across units: "five rules" is enforced by four scripts, one of which covers three
 #    rules on its own. The lists in CLAUDE.md and README enumerate instead, which cannot
 #    go stale by arithmetic. Check 1 is what actually guarantees coverage.
-for f in CLAUDE.md README.md; do
+for f in CLAUDE.md README.md guide/*.md; do
   [ -f "$f" ] || continue
   bad=$(grep -inE '\b(one|two|three|four|five|six|seven|eight|nine|ten|[0-9]+)[[:space:]]+(of these[[:space:]]+)?(rules?[[:space:]]+are[[:space:]]+enforced|hooks?|deny gates?|gates?)\b' "$f" \
         | grep -viE 'two `?Stop`? hooks' | head -1)
@@ -309,6 +313,83 @@ if [ -f docs/roadmap.md ]; then
       fi
     done
   fi
+fi
+
+# 7. The README is an overview; detail lives in guide/. Three mechanical halves of
+#    "is this the right level of detail for a first read" (the judgment half is the
+#    first-reader agent at publish, see guide/publishing.md):
+#      a) length budgets: the whole README, and each of its `##` sections. A section that
+#         outgrows its budget is a guide waiting to be written. Budgets are deliberately
+#         loose; raise one here, in the open, rather than letting the page grow by default.
+#      b) every guide is linked from the README. A guide nobody can reach from the front
+#         page is the same absence check 3b runs for skills.
+#      c) every relative link in the README and the guides resolves, anchors included.
+#         Moving a README section into a guide breaks every `#anchor` that pointed at it,
+#         silently on GitHub.
+README_MAX_LINES=250
+README_MAX_SECTION=45
+if [ -f README.md ]; then
+  n=$(wc -l < README.md | tr -d ' ')
+  [ "$n" -le "$README_MAX_LINES" ] \
+    || say "README is $n lines, over its budget of $README_MAX_LINES: move detail into a guide in guide/"
+  long=$(awk -v max="$README_MAX_SECTION" '
+    /^## /{ if (h != "" && c > max) print c " lines: " h; h=$0; c=0 }
+    { c++ }
+    END{ if (h != "" && c > max) print c " lines: " h }' README.md)
+  [ -z "$long" ] \
+    || say "README section over its budget of $README_MAX_SECTION lines ($(printf '%s' "$long" | head -1)): move the detail into a guide"
+fi
+if [ -d guide ]; then
+  for g in guide/*.md; do
+    [ -e "$g" ] || continue
+    grep -Fq "]($g" README.md 2>/dev/null || say "guide not linked from the README: $g"
+  done
+fi
+if command -v python3 >/dev/null 2>&1; then
+  broken=$(python3 -I - README.md guide/*.md <<'PY'
+import os, re, sys
+def slug(h):
+    h = re.sub(r'[`*_~]|<[^>]+>', '', h.strip().lower())
+    h = re.sub(r'[^\w\- ]', '', h)
+    return h.replace(' ', '-')
+anchors = {}
+def heads(path):
+    if path not in anchors:
+        seen, out = {}, set()
+        fence = False
+        for line in open(path, encoding='utf-8'):
+            if line.startswith('```'):
+                fence = not fence
+            if fence or not re.match(r'#{1,6} ', line):
+                continue
+            s = slug(re.sub(r'^#+ ', '', line))
+            k = seen.get(s, 0); seen[s] = k + 1
+            out.add(s if k == 0 else f'{s}-{k}')
+        anchors[path] = out
+    return anchors[path]
+for f in sys.argv[1:]:
+    if not os.path.isfile(f):
+        continue
+    fence = False
+    for i, line in enumerate(open(f, encoding='utf-8'), 1):
+        if line.startswith('```'):
+            fence = not fence
+        if fence:
+            continue
+        for target in re.findall(r'\]\(([^)\s]+)\)', line):
+            if re.match(r'[a-z]+:', target):
+                continue
+            path, _, frag = target.partition('#')
+            dest = os.path.normpath(os.path.join(os.path.dirname(f), path)) if path else f
+            if path and not os.path.exists(dest):
+                print(f'{f}:{i} -> {target} (no such file)'); continue
+            if frag and dest.endswith('.md') and frag not in heads(dest):
+                print(f'{f}:{i} -> {target} (no such heading)')
+PY
+)
+  [ -z "$broken" ] || say "broken relative link: $(printf '%s' "$broken" | head -1)"
+else
+  printf '  note: python3 not found, so relative links were not checked\n'
 fi
 
 [ "$problems" -eq 0 ] || exit 1

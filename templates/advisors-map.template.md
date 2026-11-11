@@ -2,7 +2,7 @@
 
 Which advisors exist, where their prompt notes live, and what each one reads, so the
 `advisors` skill can route and `tools/advisor-stub.py` can build the project stubs. This is a
-**map**: personal, never exported. The pattern itself is in the skill and the README
+**map**: personal, never exported. The pattern itself is in the skill and guide/advisors.md
 (*Advisors*). No advisors yet? Leave the registry empty; the skill offers to add one.
 
 **Format:** one `### <Advisor>` block per advisor under *Registry*, one `- **Key:** value`
