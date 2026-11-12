@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.10.0 — 2026-11-12
+
+- Release v0.9.0
+- advisors: Book Companion migrated onto the advisors pattern; Goodreads read via Chrome
+
 ## v0.9.0 — 2026-11-11
 
 - New guide: Local models. What runs on Ollama today (search embeddings, descriptions for private notes), setup including the context-window variant, why local is the privacy lane rather than the default, and other uses.

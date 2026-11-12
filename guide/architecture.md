@@ -170,6 +170,7 @@ written at install time instead of committed.
     │   ├── vault-health.py       vault maintenance: read-only report on frontmatter, descriptions, links, tags, duplicates
     │   ├── vault-health-weekly.sh  the unattended weekly run: report + description proposals into tmp/health/
     │   ├── advisor-stub.py       builds an advisor's paste-ready Claude project stub from its prompt note
+    │   ├── goodreads-snapshot.js  read-only Goodreads shelf snapshot, run in a signed-in browser tab
     │   ├── daily-log-stats.py    numbers from the daily-log notes: weekly averages, two-weekly summaries
     │   ├── garmin-export.py      a Garmin Connect export as a daily CSV, for a health baseline
     │   ├── frontmatter-set.py    the bulk frontmatter writer: checked, snapshotted, logged

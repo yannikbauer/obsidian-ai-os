@@ -172,6 +172,10 @@ The 09:00 task starts a session with this skill. Nobody may be there yet:
   available, then post the opening message (step 2) and **wait**. Don't write anything
   before the user answers.
 - If a note for the day already exists and is complete, say so in one line and stop.
+- Unattended, Read on a daily note is refused (the privacy guard needs a person to
+  approve it). For the completeness check and the 14-day context use
+  `_AI/tools/daily-log-stats.py table --since <D-14>`; read the notes themselves once
+  the user has answered (L044).
 
 ## Privacy
 
